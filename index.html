@@ -1,0 +1,2323 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dota 2 Match Analyzer - OpenDota Edge Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:      #060810;
+  --surf:    #0c0f1a;
+  --surf2:   #111624;
+  --brd:     #1e2540;
+  --brd2:    #2a3260;
+  --accent:  #3d6fff;
+  --green:   #00e676;
+  --gdim:    #00e67618;
+  --yellow:  #ffd740;
+  --orange:  #ff9040;
+  --red:     #ff5a5a;
+  --cyan:    #34d3e0;
+  --text:    #c8d0e8;
+  --text2:   #6b7a9e;
+  --text3:   #3d4a6e;
+  --mono:    'Share Tech Mono', monospace;
+  --sans:    'Rajdhani', sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;position:relative}
+.bg-grid{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(var(--brd) 1px,transparent 1px),linear-gradient(90deg,var(--brd) 1px,transparent 1px);
+  background-size:40px 40px;opacity:.22;
+}
+.wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:32px 20px 80px}
+
+/* Header */
+.header{display:flex;align-items:center;gap:16px;margin-bottom:28px}
+.logo-mark{width:46px;height:46px;border-radius:10px;border:1px solid var(--brd2);background:var(--surf);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-mark svg{width:26px;height:26px}
+.header-title{font-family:var(--sans);font-weight:900;font-size:26px;color:#fff;letter-spacing:.5px}
+.header-sub{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:1.5px;margin-top:2px}
+.lang-toggle{margin-left:auto;display:flex;gap:6px}
+.lang-btn{font-family:var(--mono);font-size:11px;letter-spacing:1px;padding:6px 12px;border-radius:6px;border:1px solid var(--brd2);background:var(--surf2);color:var(--text2);cursor:pointer}
+.lang-btn.active{background:var(--gdim);border-color:rgba(0,230,118,.4);color:var(--green)}
+
+/* Cards / inputs */
+.panel{background:var(--surf);border:1px solid var(--brd);border-radius:12px;padding:20px 22px;margin-bottom:20px}
+.sec-label{font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--text2);text-transform:uppercase;margin-bottom:14px}
+.input-row{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:end}
+.input-block label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--text2);text-transform:uppercase;margin-bottom:8px}
+.input-block input,.input-block select,textarea#odds-input{
+  width:100%;background:var(--surf2);border:1px solid var(--brd2);border-radius:8px;
+  color:#fff;font-family:var(--mono);font-size:15px;padding:12px 14px;
+}
+textarea#odds-input{font-size:12px;min-height:200px;resize:vertical;line-height:1.5}
+.input-block input:focus,.input-block select:focus,textarea#odds-input:focus{outline:none;border-color:var(--accent)}
+.vs-mid{font-family:var(--mono);font-size:13px;color:var(--text3);letter-spacing:2px;padding-bottom:14px;text-align:center}
+.hint{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:8px;line-height:1.6}
+.hint a{color:var(--accent);text-decoration:none}
+.controls{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:14px}
+.controls .input-block{min-width:160px}
+.controls .input-block input,.controls .input-block select{padding:9px 12px;font-size:13px}
+
+.btn-row{display:flex;gap:10px;margin-top:18px}
+.btn-analyze{
+  flex:1;padding:14px;border-radius:8px;border:none;cursor:pointer;
+  background:linear-gradient(90deg,var(--accent),#5a8bff);color:#fff;
+  font-family:var(--sans);font-weight:700;font-size:15px;letter-spacing:.5px;
+}
+.btn-analyze:disabled{opacity:.5;cursor:default}
+.btn-analyze:not(:disabled):hover{filter:brightness(1.1)}
+.btn-ghost{
+  padding:14px 20px;border-radius:8px;border:1px solid var(--brd2);background:var(--surf2);
+  color:var(--text2);cursor:pointer;font-family:var(--sans);font-weight:700;font-size:15px;
+}
+.btn-ghost:hover{border-color:var(--accent);color:#fff}
+.status-line{font-family:var(--mono);font-size:12px;color:var(--text2);margin-top:12px;min-height:16px}
+.status-line.err{color:var(--red)}
+.status-line.ok{color:var(--green)}
+
+/* Odds table */
+#odds-results{display:none}
+.summary-line{font-family:var(--mono);font-size:12px;color:var(--text2);margin-bottom:12px}
+.summary-line b{color:var(--green)}
+.tbl-wrap{overflow-x:auto;background:var(--surf);border:1px solid var(--brd);border-radius:12px}
+table.odds{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;min-width:980px}
+table.odds th{
+  text-align:left;font-size:10px;letter-spacing:1.5px;color:var(--text2);text-transform:uppercase;
+  padding:12px;border-bottom:1px solid var(--brd2);white-space:nowrap;
+}
+table.odds td{padding:12px;border-bottom:1px solid var(--brd);vertical-align:top;line-height:1.9}
+table.odds tr:last-child td{border-bottom:none}
+tr.value-row td{background:rgba(0,230,118,.06)}
+tr.fix-row td{background:var(--surf2);line-height:1.5}
+.t-name{color:#fff;font-weight:700;font-family:var(--sans);font-size:16px}
+.small{color:var(--text3);font-size:10px}
+.small b{color:var(--text2);font-weight:400}
+.ev-pos{color:var(--green);font-weight:700}
+.ev-mid{color:var(--yellow)}
+.ev-neg{color:var(--text3)}
+.pick{color:var(--green);font-weight:700;font-family:var(--sans);font-size:14px}
+.pick-none{color:var(--text3)}
+.badge-live{background:rgba(255,90,90,.12);color:var(--red);border:1px solid rgba(255,90,90,.35);border-radius:4px;padding:1px 6px;font-size:10px;letter-spacing:1px}
+.flag{display:inline-block;font-size:10px;border:1px solid var(--brd2);border-radius:4px;padding:1px 6px;margin:0 4px 4px 0;color:var(--yellow);line-height:1.6}
+.flag.bad{color:var(--red);border-color:rgba(255,90,90,.35)}
+.flag.good{color:var(--green);border-color:rgba(0,230,118,.35)}
+.act-btn{
+  font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:5px;margin:0 4px 4px 0;
+  border:1px solid var(--brd2);background:var(--surf2);color:var(--text);cursor:pointer;
+}
+.act-btn:hover{border-color:var(--accent)}
+.fix-inputs{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.mkt-tabs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.mkt-line{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.mkt-line .lbl{min-width:150px;color:var(--text)}
+.mkt-line .pp{min-width:52px;color:#fff}
+.mkt-line .fair{min-width:70px;color:var(--cyan)}
+.mo-in{width:64px;background:var(--bg);border:1px solid var(--brd2);border-radius:5px;color:#fff;font-family:var(--mono);font-size:12px;padding:4px 6px}
+.mo-in.line{width:56px}
+.fix-inputs select{background:var(--bg);border:1px solid var(--brd2);border-radius:6px;color:#fff;font-family:var(--mono);font-size:12px;padding:6px 8px}
+.fix-inputs input{
+  width:130px;background:var(--bg);border:1px solid var(--brd2);border-radius:6px;color:#fff;
+  font-family:var(--mono);font-size:12px;padding:6px 8px;
+}
+
+/* Detail tab results */
+#results{display:none}
+.matchup-bar{
+  background:var(--surf);border:1px solid var(--brd);border-radius:12px;
+  padding:20px 26px;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;
+}
+.team-name-big{font-size:22px;font-weight:700;color:#fff}
+.team-rating{font-family:var(--mono);font-size:11px;color:var(--text2);margin-top:4px}
+.matchup-center{text-align:center}
+.vs-txt{font-family:var(--mono);font-size:13px;color:var(--text3);letter-spacing:3px}
+.prob-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.prob-card{background:var(--surf);border:1px solid var(--brd);border-radius:12px;padding:18px;text-align:center}
+.prob-card .pct{font-family:var(--sans);font-weight:900;font-size:36px;margin-top:6px}
+.prob-card .pct.fav{color:var(--green)}
+.prob-card .pct.dog{color:var(--accent)}
+.prob-card .team-label{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:1px}
+.note-box{background:var(--surf);border:1px solid var(--brd);border-radius:10px;padding:12px 16px;margin-bottom:10px;font-family:var(--mono);font-size:11px;line-height:1.7}
+.note-box.elo{border-left:3px solid var(--accent)}
+.note-box.h2h{border-left:3px solid var(--orange)}
+.note-box.form{border-left:3px solid var(--cyan)}
+.note-box.lineup{border-left:3px solid var(--green)}
+.note-box.lineup.warn{border-left:3px solid var(--yellow);color:var(--yellow)}
+.note-box .tag{color:var(--text2);text-transform:uppercase;letter-spacing:1.5px;font-size:9px;display:block;margin-bottom:4px}
+.trace-box{background:var(--surf);border:1px solid var(--brd);border-radius:12px;padding:16px 20px;margin-bottom:20px}
+.trace-title{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--text2);text-transform:uppercase;margin-bottom:12px}
+.trace-row{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;padding:7px 0;border-bottom:1px solid var(--brd);color:var(--text)}
+.trace-row:last-child{border-bottom:none;font-weight:700;color:#fff}
+.trace-num{color:var(--text3);min-width:16px}
+.trace-arrow{color:var(--text3)}
+.trace-val{color:var(--green);font-weight:700}
+.fair-odds{font-family:var(--mono);font-size:12px;color:var(--text2);margin-top:6px}
+.fair-odds b{color:var(--cyan)}
+
+.tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.tab-btn{font-family:var(--mono);font-size:12px;letter-spacing:1px;padding:9px 18px;border-radius:8px;border:1px solid var(--brd2);background:var(--surf2);color:var(--text2);cursor:pointer;text-transform:uppercase}
+.tab-btn.active{background:var(--gdim);border-color:rgba(0,230,118,.4);color:var(--green)}
+
+/* History */
+.hist-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:14px}
+.hist-stat-card .val.neg{color:var(--red)}
+.hist-stat-card .sub{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px}
+.hist-filter{display:flex;gap:10px;align-items:center;margin-bottom:16px;font-family:var(--mono);font-size:11px;color:var(--text2)}
+.hist-filter select{background:var(--surf2);border:1px solid var(--brd2);border-radius:6px;color:#fff;font-family:var(--mono);font-size:11px;padding:6px 8px}
+.hist-line{font-family:var(--mono);font-size:11px;color:var(--text2);margin-top:6px;line-height:1.7}
+.hist-line b{color:#fff;font-weight:400}
+.clv-pos{color:var(--green)}.clv-neg{color:var(--red)}
+.close-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--text2)}
+.close-form input{width:80px;background:var(--bg);border:1px solid var(--brd2);border-radius:6px;color:#fff;font-family:var(--mono);font-size:12px;padding:6px 8px}
+.hist-stat-card{background:var(--surf);border:1px solid var(--brd);border-radius:12px;padding:16px;text-align:center}
+.hist-stat-card .val{font-family:var(--sans);font-weight:900;font-size:28px;color:var(--green)}
+.hist-stat-card .lbl{font-family:var(--mono);font-size:10px;color:var(--text2);letter-spacing:1px;margin-top:4px}
+.hist-row{background:var(--surf);border:1px solid var(--brd);border-radius:10px;padding:14px 18px;margin-bottom:10px}
+.hist-row-top{display:flex;justify-content:space-between;align-items:center}
+.hist-match{font-family:var(--sans);font-weight:700;font-size:15px;color:#fff}
+.hist-meta{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px}
+.hist-badge{font-family:var(--mono);font-size:10px;letter-spacing:1px;padding:4px 10px;border-radius:5px;text-transform:uppercase}
+.hist-badge.pending{background:var(--surf2);color:var(--text2);border:1px solid var(--brd2)}
+.hist-badge.correct{background:var(--gdim);color:var(--green);border:1px solid rgba(0,230,118,.4)}
+.hist-badge.wrong{background:rgba(255,90,90,.1);color:var(--red);border:1px solid rgba(255,90,90,.35)}
+.hist-outcome-btns{display:flex;gap:8px;margin-top:10px}
+.hist-outcome-btns button{flex:1;font-family:var(--mono);font-size:11px;padding:8px;border-radius:6px;border:1px solid var(--brd2);background:var(--surf2);color:var(--text);cursor:pointer}
+.hist-outcome-btns button:hover{border-color:var(--accent)}
+.hist-empty{text-align:center;padding:40px;color:var(--text3);font-family:var(--mono);font-size:12px}
+
+/* Team search */
+.search-wrap{position:relative}
+.search-results{position:absolute;top:100%;left:0;right:0;z-index:10;margin-top:4px;background:var(--surf2);border:1px solid var(--brd2);border-radius:8px;max-height:260px;overflow-y:auto;display:none}
+.search-results.show{display:block}
+.search-result-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--brd);font-family:var(--mono);font-size:12px}
+.search-result-item:last-child{border-bottom:none}
+.search-result-item:hover{background:var(--surf)}
+.search-result-name{color:#fff;font-weight:700}
+.search-result-meta{color:var(--text3);font-size:10px;margin-top:2px}
+
+.data-quality{font-family:var(--mono);font-size:10px;color:var(--text3);text-align:center;margin-top:24px;letter-spacing:.5px;line-height:1.8}
+.data-quality a{color:var(--text2)}
+.footer-version{text-align:center;margin-top:40px;font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:2px}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="wrap">
+
+  <div class="header">
+    <div class="logo-mark">
+      <svg viewBox="0 0 100 100" fill="none">
+        <circle cx="50" cy="50" r="44" stroke="#3d6fff" stroke-width="3"/>
+        <circle cx="50" cy="50" r="26" stroke="#00e676" stroke-width="3"/>
+        <line x1="50" y1="2" x2="50" y2="24" stroke="#c8d0e8" stroke-width="3"/>
+        <line x1="50" y1="76" x2="50" y2="98" stroke="#c8d0e8" stroke-width="3"/>
+        <line x1="2" y1="50" x2="24" y2="50" stroke="#c8d0e8" stroke-width="3"/>
+        <line x1="76" y1="50" x2="98" y2="50" stroke="#c8d0e8" stroke-width="3"/>
+        <circle cx="50" cy="50" r="4" fill="#00e676"/>
+      </svg>
+    </div>
+    <div>
+      <div class="header-title">Dota 2 Match Analyzer</div>
+      <div class="header-sub">OPENDOTA EDGE ENGINE · v0.14</div>
+    </div>
+    <div class="lang-toggle">
+      <button class="lang-btn active" id="btn-lang-cs" onclick="setLang('cs')">CS</button>
+      <button class="lang-btn" id="btn-lang-en" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-btn-odds" onclick="showTab('odds')" data-i18n="tab-odds">📋 Kurzy</button>
+    <button class="tab-btn" id="tab-btn-detail" onclick="showTab('detail')" data-i18n="tab-detail">📊 Detail zápasu</button>
+    <button class="tab-btn" id="tab-btn-history" onclick="showTab('history')" data-i18n="tab-history">📜 Historie</button>
+  </div>
+
+  <!-- ═════════ TAB: ODDS ═════════ -->
+  <div id="tab-odds">
+    <div class="panel">
+      <div class="sec-label" data-i18n="odds-title">Kurzy bookmakera</div>
+      <div class="input-block">
+        <label data-i18n="odds-paste-label">Vlož text zkopírovaný ze stránky bookmakera</label>
+        <textarea id="odds-input" spellcheck="false" data-i18n-ph="odds-placeholder"></textarea>
+      </div>
+      <div class="controls">
+        <div class="input-block">
+          <label data-i18n="lbl-min-ev">Min. EV pro tip (%)</label>
+          <input type="number" id="min-ev" value="5" step="0.5" min="0" onchange="renderTable()">
+        </div>
+        <div class="input-block">
+          <label data-i18n="lbl-sort">Řazení</label>
+          <select id="sort-mode" onchange="renderTable()">
+            <option value="edge" data-i18n="sort-edge">Podle edge</option>
+            <option value="order" data-i18n="sort-order">Podle pořadí v textu</option>
+          </select>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="input-block">
+          <label data-i18n="lbl-model">Model hráčů (player_ratings.json z backtest.py)</label>
+          <input type="file" id="model-file" accept=".json" onchange="loadModelFile(this)">
+        </div>
+        <button class="act-btn" onclick="clearModel()" data-i18n="btn-model-clear">Odebrat model</button>
+        <label style="font-family:var(--mono);font-size:11px;color:var(--text2);display:flex;gap:6px;align-items:center;cursor:pointer">
+          <input type="checkbox" id="offline-mode" checked onchange="try{localStorage.setItem('dota_offline_v1', this.checked ? '1' : '0')}catch{}">
+          <span data-i18n="lbl-offline">Rychlý režim (bez OpenDota, sestavy z modelu)</span>
+        </label>
+      </div>
+      <div class="hint" id="model-status"></div>
+      <div class="hint" data-i18n="odds-hint">Kurzy se berou jako výhra v zápase (série). Model počítá sílu na mapu a pro Bo3/Bo5 ji převádí na pravděpodobnost série. U LIVE zápasů se použije aktuální skóre map. Žádný API klíč není potřeba, požadavky jdou s rozestupem kvůli limitu 60/min.</div>
+      <div class="btn-row">
+        <button class="btn-analyze" id="btn-odds" onclick="runOddsAnalysis()" data-i18n="btn-odds">🎯 Analyzovat kurzy</button>
+        <button class="btn-ghost" onclick="clearOdds()" data-i18n="btn-clear">Vymazat</button>
+        <button class="btn-ghost" onclick="clearTeamCache()" data-i18n="btn-refresh">Načíst data znovu</button>
+      </div>
+      <div class="status-line" id="status-odds"></div>
+    </div>
+
+    <div id="odds-results">
+      <div class="mkt-tabs">
+        <button class="tab-btn active" id="mkt-btn-win" onclick="setMkt('win')" data-i18n="mkt-win">Vítěz zápasu</button>
+        <button class="tab-btn" id="mkt-btn-maps" onclick="setMkt('maps')" data-i18n="mkt-maps">Handicap, mapy, přesný výsledek</button>
+        <button class="tab-btn" id="mkt-btn-kd" onclick="setMkt('kd')" data-i18n="mkt-kd">Killy a délka mapy</button>
+      </div>
+      <div class="summary-line" id="summary-line"></div>
+      <div class="tbl-wrap"><table class="odds" id="odds-table"></table></div>
+    </div>
+  </div>
+
+  <!-- ═════════ TAB: DETAIL ═════════ -->
+  <div id="tab-detail" style="display:none">
+    <div class="panel">
+      <div class="sec-label" data-i18n="sec-input">Zadání zápasu</div>
+
+      <div class="input-row" style="margin-bottom:14px">
+        <div class="input-block search-wrap">
+          <label data-i18n="lbl-search-a">Hledat Team A podle jména</label>
+          <input type="text" id="team-a-search" placeholder="Team Liquid" oninput="onTeamSearch('a')">
+          <div class="search-results" id="search-results-a"></div>
+        </div>
+        <div class="vs-mid"></div>
+        <div class="input-block search-wrap">
+          <label data-i18n="lbl-search-b">Hledat Team B podle jména</label>
+          <input type="text" id="team-b-search" placeholder="Tundra Esports" oninput="onTeamSearch('b')">
+          <div class="search-results" id="search-results-b"></div>
+        </div>
+      </div>
+
+      <div class="input-row">
+        <div class="input-block">
+          <label data-i18n="lbl-team-a">Team A - OpenDota Team ID</label>
+          <input type="number" id="team-a-id" placeholder="8291895">
+        </div>
+        <div class="vs-mid">VS</div>
+        <div class="input-block">
+          <label data-i18n="lbl-team-b">Team B - OpenDota Team ID</label>
+          <input type="number" id="team-b-id" placeholder="8599101">
+        </div>
+      </div>
+      <div class="controls">
+        <div class="input-block">
+          <label data-i18n="lbl-bo">Formát</label>
+          <select id="manual-bo">
+            <option value="1">Bo1</option>
+            <option value="3" selected>Bo3</option>
+            <option value="5">Bo5</option>
+          </select>
+        </div>
+      </div>
+      <div class="hint" data-i18n="hint-text">Team ID najdeš v URL na <a href="https://www.opendota.com/teams" target="_blank">opendota.com/teams</a>, např. opendota.com/teams/<b>8291895</b>.</div>
+      <div class="btn-row">
+        <button class="btn-analyze" id="btn-analyze" onclick="runManual()" data-i18n="btn-analyze">🎯 Analyzovat zápas</button>
+      </div>
+      <div class="status-line" id="status-line"></div>
+    </div>
+
+    <div id="results">
+      <div class="matchup-bar" id="matchup-bar"></div>
+      <div class="prob-grid" id="prob-grid"></div>
+      <div class="trace-box" id="trace-box"></div>
+      <div id="notes-container"></div>
+    </div>
+  </div>
+
+  <!-- ═════════ TAB: HISTORY ═════════ -->
+  <div id="tab-history" style="display:none">
+    <div class="hist-stats" id="hist-stats"></div>
+    <div class="hist-filter">
+      <span data-i18n="hist-filter-lbl">Statistiky pro</span>
+      <select id="hist-filter" onchange="renderHistoryTab()">
+        <option value="all" data-i18n="hist-filter-all">všechny uložené</option>
+        <option value="picks" data-i18n="hist-filter-picks">jen tipy s edge</option>
+      </select>
+    </div>
+    <div class="hint" data-i18n="hist-hint" style="margin:-6px 0 16px"></div>
+    <div id="hist-list"></div>
+  </div>
+
+  <div class="data-quality" data-i18n="data-quality-text">
+    Data: <a href="https://www.opendota.com" target="_blank">OpenDota API</a> (community-maintained, free tier).
+  </div>
+  <div class="footer-version">DOTA 2 MATCH ANALYZER · v0.13 · SISTER TOOL TO CS2 TRADER DASHBOARD</div>
+</div>
+
+<script>
+const API_BASE = 'https://api.opendota.com/api';
+
+let _lang = 'cs';
+
+const TRANSLATIONS = {
+  cs: {
+    'tab-odds':        '📋 Kurzy',
+    'tab-detail':      '📊 Detail zápasu',
+    'tab-history':     '📜 Historie',
+    'odds-title':      'Kurzy bookmakera',
+    'odds-paste-label':'Vlož text zkopírovaný ze stránky bookmakera (formát typu Tipsport, Fortuna, Nike.sk nebo Doxxbet, rozpozná se sám). Víc bookmakerů vlož pod sebe, poznají se podle formátu stránky. Jiný název dáš řádkem @Název nad blokem.',
+    'odds-placeholder':'Sem vlož kurzy, např.\nBlast Slam, Dota 2\nNatus Vincere - OG\nZajtra | 15:00lepšie z 3 máp\n+24\n1.37\n2.73',
+    'lbl-min-ev':      'Min. EV pro tip (%)',
+    'lbl-sort':        'Řazení',
+    'sort-edge':       'Podle edge',
+    'sort-order':      'Podle pořadí v textu',
+    'odds-hint':       'Kurzy se berou jako výhra v zápase (série). Model počítá sílu na mapu a pro Bo3/Bo5 ji převádí na pravděpodobnost série. U LIVE zápasů se použije aktuální skóre map. Žádný API klíč není potřeba, požadavky jdou s rozestupem kvůli limitu 60/min. Forma a H2H jsou podle backtestu vypnuté (váha 0).',
+    'btn-odds':        '🎯 Analyzovat kurzy',
+    'btn-clear':       'Vymazat',
+    'btn-refresh':     'Načíst data znovu',
+    'cache-cleared':   '✓ Uložená data týmů smazána, při další analýze se stáhnou znovu z OpenDota.',
+    'err-nothing':     '⚠ V textu jsem nenašel žádné zápasy.',
+    'lbl-model':       'Model hráčů (player_ratings.json z backtest.py)',
+    'btn-model-clear': 'Odebrat model',
+    'model-none':      'Model hráčů není načten, používá se rating týmu z OpenDota.',
+    'model-loaded':    'Model hráčů načten: {np} hráčů, {nt} týmů, data do {asof}.',
+    'model-stale':     ' Data jsou stará {d} dní, spusť backtest znovu.',
+    'model-bad':       '⚠ Soubor není platný player_ratings.json.',
+    'model-nolineups': ' ⚠ Soubor nemá sestavy týmů, rychlý režim nefunguje. Spusť python backtest.py (verze v3.2) a nahraj nový soubor.',
+    'lbl-offline':     'Rychlý režim (bez OpenDota, sestavy z modelu)',
+    'od-down':         'OpenDota je nedostupná (limit nebo výpadek)',
+    'row-nodata':      'málo dat: hráči nejsou v modelu a rating chybí',
+    'flag-offline':    'sestava z modelu (stará {d} dní)',
+    'model-nonames':   ' ⚠ Soubor nemá názvy týmů, slabší týmy mimo top 1000 se nenajdou. Spusť python backtest.py (verze v3.1) a nahraj nový soubor.',
+    'tag-players':     'Model hráčů (backtest)',
+    'players-note':    '{a}: {na}/5 hráčů v modelu, {b}: {nb}/5 → {p} pro {a} na mapu (data do {asof}). Sestava = poslední odehraný zápas týmu.',
+    'weight-off':      'váha 0, jen informativně',
+    'h2h-off':         'Vypnuto: backtest neukázal přínos H2H.',
+    'trace-players':   'Model hráčů',
+    'flag-pm':         'model hráčů',
+    'flag-odr':        'rating týmu OpenDota (bez modelu hráčů)',
+    'status-parsed':   'Nalezeno {n} zápasů ({k} s kurzy).',
+    'status-teamlist-fail': '⚠ Seznam týmů z OpenDota se nenačetl a není uložená kopie ani model hráčů. Zadej Team ID ručně přes ⚙ u řádku.',
+    'status-teamlist-cache': '⚠ Seznam týmů z OpenDota se nenačetl, používám uloženou kopii nebo názvy z modelu hráčů.',
+    'status-teamlist': '⏳ Načítám seznam týmů z OpenDota...',
+    'status-progress': '⏳ Analyzuji {i}/{n}: {m}',
+    'status-finished': '✓ Hotovo. Zápasů s edge nad {ev}%: {v}.',
+    'summary':         '{n} zápasů · {k} s kurzy · <b>{v}</b> s edge nad {ev}%',
+    'books-cmp':       'Bookmakeři (průměrná marže, kolikrát nejlepší kurz):',
+    'books-item':      '<b>{name}</b> {m}%, nejlepší {best}× ({n} zápasů)',
+    'lbl-best':        'nejlepší kurzy dohromady: marže',
+    'lbl-only':        'jen u tohoto bookmakera',
+    'th-match':        'Zápas',
+    'mkt-win':         'Vítěz zápasu',
+    'mkt-maps':        'Handicap, mapy, přesný výsledek',
+    'mkt-kd':          'Killy a délka mapy',
+    'mkt-maps-hint':   'Pravděpodobnost a fair kurz z modelu (na mapu → série). Kurz bookmakera zapiš do políčka, EV se dopočítá. U LIVE zápasů se počítá s aktuálním skóre map. Model bere mapy jako nezávislé.',
+    'mkt-need-run':    'nejdřív spusť Analyzovat kurzy',
+    'mkt-bo1':         'Bo1: jen vítěz zápasu (změň formát přes ⚙ ID)',
+    'mkt-lowdata':     'málo dat, výsledky jen orientačně',
+    'th-score':        'Přesný výsledek',
+    'th-hcp':          'Handicap na mapy',
+    'th-tot':          'Počet map',
+    'th-kills':        'Celkové killy na mapu',
+    'th-dur':          'Délka mapy',
+    'lbl-over':        'Nad',
+    'lbl-under':       'Pod',
+    'lbl-permap':      'na mapu',
+    'lbl-expected':    'Očekávaná hodnota',
+    'lbl-line':        'Linie bookmakera',
+    'ph-odds':         'kurz',
+    'ph-line':         'linie',
+    'kd-none':         '⚠ Model kill a délky v player_ratings.json chybí. Spusť python backtest.py (verze v3.4) a nahraj nový soubor.',
+    'kd-hint':         'Odhad na jednu mapu z posledních zápasů obou týmů (průměr ligy {lt} kill, {ld} min; typická odchylka ±{st} kill, ±{sd} min). Zapiš linii a kurzy nad/pod, P(nad) a EV se dopočítají. Pozor: patch a draft mohou výsledek hodně posunout.',
+    'kd-thin':         'málo map v datech ({a} / {b}), odhad je blízko průměru ligy',
+    'th-model':        'Model (série) vs trh',
+    'th-fair':         'Fair kurz modelu',
+    'th-book':         'Kurz bookmakera',
+    'th-ev':           'EV',
+    'th-pick':         'Tip',
+    'th-data':         'Kvalita dat',
+    'lbl-nv':          'trh',
+    'lbl-margin':      'marže',
+    'pick-none':       'bez edge',
+    'no-odds':         'bez kurzů',
+    'row-wait':        'čeká...',
+    'row-loading':     'počítám...',
+    'row-noteam':      'tým nenalezen v OpenDota, zadej ID přes ⚙',
+    'row-error':       'chyba: {msg}',
+    'flag-fuzzy':      '~ přibližná shoda: {team}',
+    'flag-stale':      'neaktivní: {team} (>{d} dní)',
+    'flag-lineup':     'mimo soupisku: {team} ({n} hráč/i v posledním zápase)',
+    'flag-gap':        'velký rozdíl s trhem ({d} p.b.), nejspíš chybí informace',
+    'flag-thin':       'málo map v datech: {team} ({n})',
+    'flag-newpl':      'noví hráči: {team} (ø {n} map)',
+    'pick-unreliable': 'edge, ale málo dat (viz Kvalita dat)',
+    'err-same-team':   'oba názvy se spárovaly na stejný tým, oprav ID přes ⚙',
+    'flag-live':       'LIVE: jen přibližně',
+    'flag-ok':         'OK',
+    'btn-detail':      'Detail',
+    'btn-fix':         '⚙ ID',
+    'btn-recalc':      'Přepočítat',
+    'btn-save':        '💾 Uložit',
+    'btn-saved':       '✓ Uloženo',
+    'fix-hint':        'Zkontroluj spárování týmů a formát. Případně zadej správné OpenDota Team ID (najdeš na opendota.com/teams). Nike.sk a Doxxbet formát nezobrazují, výchozí je Bo3.',
+    'live-tag':        'LIVE {s}',
+    'sec-input':       'Zadání zápasu',
+    'lbl-team-a':      'Team A - OpenDota Team ID',
+    'lbl-team-b':      'Team B - OpenDota Team ID',
+    'lbl-bo':          'Formát',
+    'hint-text':       'Team ID najdeš v URL na <a href="https://www.opendota.com/teams" target="_blank">opendota.com/teams</a>, např. opendota.com/teams/<b>8291895</b>.',
+    'btn-analyze':     '🎯 Analyzovat zápas',
+    'data-quality-text': 'Data: <a href="https://www.opendota.com" target="_blank">OpenDota API</a> (community-maintained, free tier). Elo z týmového `rating`, H2H a forma z /teams/{id}/matches, lineup integrity z aktuální sestavy vs. hráčů v posledním zápase. Seznam /teams obsahuje jen top ~1000 týmů podle ratingu.',
+    'err-need-ids':    '⚠ Zadej obě Team ID.',
+    'status-loading':  '⏳ Načítám data týmů (omezeno na 60 požadavků/min)...',
+    'status-done':     '✓ Hotovo.',
+    'status-err':      '⚠ Chyba: ',
+    'rating-label':    'rating',
+    'tag-elo':         'Elo baseline (na mapu)',
+    'elo-note':        '{a} rating {ra} vs {b} rating {rb} → {p} pro {a} před korekcemi.',
+    'elo-note-na':     'N/A (rating chybí u jednoho týmu)',
+    'tag-h2h':         'H2H (recency-weighted)',
+    'h2h-note':        '{n} z {m} posledních H2H zápasů se stejným jádrem sestavy (3+ hráči), weighted win rate {a}: {wr}% → {sign}{adj}pp pro {fav}.',
+    'h2h-none':        'Žádný H2H zápas se stejným jádrem sestavy (3+ hráči), zkontrolováno {m}.',
+    'tag-form':        'Recent form',
+    'form-note':       '{a} {fa} vs {b} {fb} → {sign}{adj}pp pro {fav}.',
+    'form-nodata':     'bez dat',
+    'tag-combo':       'Kombinace',
+    'combo-note':      'H2H a recent form souhlasí ve směru, menší zdroj vážen na {pct}%. Výsledný posun: {sign}{val}pp.',
+    'tag-lineup':      '⚠ Lineup integrity: {team}',
+    'lineup-mismatch': '{n} hráč(i) v posledním zápase neodpovídá aktuální sestavě (stand-in signál)',
+    'lineup-thin':     '{n} hráč(i) má <5 odehraných zápasů s týmem',
+    'lineup-penalty':  'Rating týmu snížen o {elo} Elo bodů.',
+    'lineup-in-pm':    'Model hráčů počítá s hráči, kteří nastoupili v posledním zápase. Pokud tým nastoupí v jiné sestavě, odhad neplatí.',
+    'fair-odds-label': 'fair odds',
+    'trace-title':     '📐 Výpočet krok za krokem',
+    'trace-elo':       'Elo baseline',
+    'trace-h2h-form':  '+ H2H/form korekce',
+    'trace-lineup':    'Lineup korekce ratingu ({team})',
+    'trace-final':     'Na mapu',
+    'trace-series':    'FINÁLNÍ: Bo{bo}{st}',
+    'lbl-search-a':    'Hledat Team A podle jména',
+    'lbl-search-b':    'Hledat Team B podle jména',
+    'search-never':    'nikdy nehrál',
+    'search-today':    'dnes',
+    'search-days-ago': 'před {n} dny',
+    'search-none':     'Žádný tým nenalezen.',
+    'hist-total':      'Celkem uloženo',
+    'hist-resolved':   'Vyhodnoceno',
+    'hist-accuracy':   'Přesnost',
+    'hist-empty':      'Zatím žádná historie.',
+    'hist-favored':    'model favorizoval {team} ({pct}%)',
+    'hist-mark-winner':'✓ Vyhrál {team}',
+    'hist-winner-was': 'Skutečný vítěz: {team}',
+    'hist-odds':       'kurzy {a} / {b}',
+    'hist-avg-clv':    'Průměrné CLV',
+    'hist-beat':       'Porazil uzavírací kurz',
+    'hist-roi':        'ROI (1 jednotka)',
+    'hist-pnl':        '{p} j. z {n} sázek',
+    'hist-ll':         'Log loss model / uzávěr',
+    'hist-n':          'n = {n}',
+    'hist-need-close': 'doplň uzavírací kurzy',
+    'hist-filter-lbl': 'Statistiky pro',
+    'hist-filter-all': 'všechny uložené',
+    'hist-filter-picks': 'jen tipy s edge',
+    'hist-hint':       'CLV = vzatý kurz × pravděpodobnost z uzavíracího kurzu bez marže − 1. Kladné CLV znamená, že jsi porazil uzavírací kurz. Uzavírací kurz zapiš těsně před začátkem zápasu. Strana = ta, kterou model při uložení preferoval (vyšší EV). ROI i log loss počítají jen vyhodnocené zápasy.',
+    'hist-side':       'Strana modelu: <b>{team}</b> @ {o} · EV {ev}',
+    'hist-pick':       'TIP',
+    'hist-close-line': 'Uzávěr {o} (fair {f}, marže {m}%)',
+    'hist-no-odds':    'Bez kurzů, CLV nelze spočítat. Doplň kurz v době tipu.',
+    'hist-live':       'LIVE, CLV jen orientační',
+    'hist-taken':      'Kurz při tipu A/B',
+    'hist-closing':    'Uzavírací A/B',
+    'hist-save-odds':  'Uložit kurzy',
+    'hist-undo':       'Zrušit výsledek',
+  },
+  en: {
+    'tab-odds':        '📋 Odds',
+    'tab-detail':      '📊 Match detail',
+    'tab-history':     '📜 History',
+    'odds-title':      'Bookmaker odds',
+    'odds-paste-label':'Paste the text copied from the bookmaker page (Tipsport, Fortuna, Nike.sk or Doxxbet layout, detected automatically). Paste several bookmakers one under another, each is recognised by its page layout. Use a line @Name above a block to rename it.',
+    'odds-placeholder':'Paste odds here, e.g.\nBlast Slam, Dota 2\nNatus Vincere - OG\nZajtra | 15:00lepšie z 3 máp\n+24\n1.37\n2.73',
+    'lbl-min-ev':      'Min. EV for a pick (%)',
+    'lbl-sort':        'Sort',
+    'sort-edge':       'By edge',
+    'sort-order':      'By order in text',
+    'odds-hint':       'Odds are treated as match (series) winner. The model estimates per-map strength and converts it to series probability for Bo3/Bo5. For LIVE matches the current map score is used. No API key needed; requests are spaced out because of the 60/min limit. Form and H2H are switched off based on the backtest (weight 0).',
+    'btn-odds':        '🎯 Analyze odds',
+    'btn-clear':       'Clear',
+    'btn-refresh':     'Reload data',
+    'cache-cleared':   '✓ Cached team data cleared, it will be downloaded again from OpenDota on the next run.',
+    'err-nothing':     '⚠ No matches found in the text.',
+    'lbl-model':       'Player model (player_ratings.json from backtest.py)',
+    'btn-model-clear': 'Remove model',
+    'model-none':      'No player model loaded, using the OpenDota team rating.',
+    'model-loaded':    'Player model loaded: {np} players, {nt} teams, data up to {asof}.',
+    'model-stale':     ' Data is {d} days old, rerun the backtest.',
+    'model-bad':       '⚠ Not a valid player_ratings.json file.',
+    'model-nolineups': ' ⚠ The file has no team lineups, fast mode will not work. Run python backtest.py (v3.2) and load the new file.',
+    'lbl-offline':     'Fast mode (no OpenDota, lineups from the model)',
+    'od-down':         'OpenDota is unavailable (rate limit or outage)',
+    'row-nodata':      'not enough data: players not in the model and no rating',
+    'flag-offline':    'lineup from model ({d} days old)',
+    'model-nonames':   ' ⚠ The file has no team names, lower-tier teams outside the top 1000 will not be found. Run python backtest.py (v3.1) and load the new file.',
+    'tag-players':     'Player model (backtest)',
+    'players-note':    '{a}: {na}/5 players in the model, {b}: {nb}/5 → {p} for {a} per map (data up to {asof}). Lineup = the team\'s last played match.',
+    'weight-off':      'weight 0, informational only',
+    'h2h-off':         'Off: the backtest showed no benefit from H2H.',
+    'trace-players':   'Player model',
+    'flag-pm':         'player model',
+    'flag-odr':        'OpenDota team rating (no player model)',
+    'status-parsed':   'Found {n} matches ({k} with odds).',
+    'status-teamlist-fail': '⚠ The OpenDota team list failed to load and there is no saved copy or player model. Enter Team IDs manually via ⚙ on each row.',
+    'status-teamlist-cache': '⚠ The OpenDota team list failed to load, using the saved copy or the team names from the player model.',
+    'status-teamlist': '⏳ Loading team list from OpenDota...',
+    'status-progress': '⏳ Analyzing {i}/{n}: {m}',
+    'status-finished': '✓ Done. Matches with edge above {ev}%: {v}.',
+    'summary':         '{n} matches · {k} with odds · <b>{v}</b> with edge above {ev}%',
+    'books-cmp':       'Bookmakers (average margin, times best price):',
+    'books-item':      '<b>{name}</b> {m}%, best {best}× ({n} matches)',
+    'lbl-best':        'best prices combined: margin',
+    'lbl-only':        'only at this bookmaker',
+    'th-match':        'Match',
+    'mkt-win':         'Match winner',
+    'mkt-maps':        'Handicap, maps, correct score',
+    'mkt-kd':          'Kills and map length',
+    'mkt-maps-hint':   'Probability and fair odds from the model (per map → series). Type the bookmaker odds into a field and EV is computed. LIVE matches use the current map score. The model treats maps as independent.',
+    'mkt-need-run':    'run Analyze odds first',
+    'mkt-bo1':         'Bo1: match winner only (change the format via ⚙ ID)',
+    'mkt-lowdata':     'little data, indicative only',
+    'th-score':        'Correct score',
+    'th-hcp':          'Map handicap',
+    'th-tot':          'Total maps',
+    'th-kills':        'Total kills per map',
+    'th-dur':          'Map length',
+    'lbl-over':        'Over',
+    'lbl-under':       'Under',
+    'lbl-permap':      'per map',
+    'lbl-expected':    'Expected',
+    'lbl-line':        'Bookmaker line',
+    'ph-odds':         'odds',
+    'ph-line':         'line',
+    'kd-none':         '⚠ The kills and length model is missing in player_ratings.json. Run python backtest.py (v3.4) and load the new file.',
+    'kd-hint':         'Per-map estimate from both teams\' recent maps (league average {lt} kills, {ld} min; typical deviation ±{st} kills, ±{sd} min). Enter the line and over/under odds, P(over) and EV are computed. Note: patch and draft can move this a lot.',
+    'kd-thin':         'few maps in data ({a} / {b}), estimate stays close to the league average',
+    'th-model':        'Model (series) vs market',
+    'th-fair':         'Model fair odds',
+    'th-book':         'Bookmaker odds',
+    'th-ev':           'EV',
+    'th-pick':         'Pick',
+    'th-data':         'Data quality',
+    'lbl-nv':          'mkt',
+    'lbl-margin':      'margin',
+    'pick-none':       'no edge',
+    'no-odds':         'no odds',
+    'row-wait':        'waiting...',
+    'row-loading':     'computing...',
+    'row-noteam':      'team not found in OpenDota, enter ID via ⚙',
+    'row-error':       'error: {msg}',
+    'flag-fuzzy':      '~ approximate match: {team}',
+    'flag-stale':      'inactive: {team} (>{d} days)',
+    'flag-lineup':     'off roster: {team} ({n} player(s) in the last match)',
+    'flag-gap':        'big gap to the market ({d} pp), probably missing information',
+    'flag-thin':       'few maps in data: {team} ({n})',
+    'flag-newpl':      'new players: {team} (avg {n} maps)',
+    'pick-unreliable': 'edge, but too little data (see Data quality)',
+    'err-same-team':   'both names matched the same team, fix the ID via ⚙',
+    'flag-live':       'LIVE: approximate only',
+    'flag-ok':         'OK',
+    'btn-detail':      'Detail',
+    'btn-fix':         '⚙ ID',
+    'btn-recalc':      'Recalculate',
+    'btn-save':        '💾 Save',
+    'btn-saved':       '✓ Saved',
+    'fix-hint':        'Check the team matching and the format. If needed, enter the correct OpenDota Team ID (see opendota.com/teams). Nike.sk and Doxxbet do not show the format, Bo3 is assumed.',
+    'live-tag':        'LIVE {s}',
+    'sec-input':       'Match Input',
+    'lbl-team-a':      'Team A - OpenDota Team ID',
+    'lbl-team-b':      'Team B - OpenDota Team ID',
+    'lbl-bo':          'Format',
+    'hint-text':       'Find the Team ID in the URL at <a href="https://www.opendota.com/teams" target="_blank">opendota.com/teams</a>, e.g. opendota.com/teams/<b>8291895</b>.',
+    'btn-analyze':     '🎯 Analyze match',
+    'data-quality-text': 'Data: <a href="https://www.opendota.com" target="_blank">OpenDota API</a> (community-maintained, free tier). Elo from team `rating`, H2H and form from /teams/{id}/matches, lineup integrity from current roster vs. players in the last match. The /teams list only covers the top ~1000 teams by rating.',
+    'err-need-ids':    '⚠ Enter both Team IDs.',
+    'status-loading':  '⏳ Loading team data (throttled to 60 requests/min)...',
+    'status-done':     '✓ Done.',
+    'status-err':      '⚠ Error: ',
+    'rating-label':    'rating',
+    'tag-elo':         'Elo baseline (per map)',
+    'elo-note':        '{a} rating {ra} vs {b} rating {rb} → {p} for {a} before corrections.',
+    'elo-note-na':     'N/A (rating missing for one team)',
+    'tag-h2h':         'H2H (recency-weighted)',
+    'h2h-note':        '{n} of the last {m} H2H matches with the same core (3+ players), weighted win rate {a}: {wr}% → {sign}{adj}pp for {fav}.',
+    'h2h-none':        'No H2H match with the same core lineup (3+ players), checked {m}.',
+    'tag-form':        'Recent form',
+    'form-note':       '{a} {fa} vs {b} {fb} → {sign}{adj}pp for {fav}.',
+    'form-nodata':     'no data',
+    'tag-combo':       'Combination',
+    'combo-note':      'H2H and recent form agree in direction, smaller source weighted at {pct}%. Resulting shift: {sign}{val}pp.',
+    'tag-lineup':      '⚠ Lineup integrity: {team}',
+    'lineup-mismatch': '{n} player(s) in the last match do not match the current roster (stand-in signal)',
+    'lineup-thin':     '{n} player(s) have <5 matches played with the team',
+    'lineup-penalty':  'Team rating reduced by {elo} Elo points.',
+    'lineup-in-pm':    'The player model uses the players from the last match. If the team plays a different lineup, the estimate does not hold.',
+    'fair-odds-label': 'fair odds',
+    'trace-title':     '📐 Step-by-step calculation',
+    'trace-elo':       'Elo baseline',
+    'trace-h2h-form':  '+ H2H/form correction',
+    'trace-lineup':    'Lineup rating adjustment ({team})',
+    'trace-final':     'Per map',
+    'trace-series':    'FINAL: Bo{bo}{st}',
+    'lbl-search-a':    'Search Team A by name',
+    'lbl-search-b':    'Search Team B by name',
+    'search-never':    'never played',
+    'search-today':    'today',
+    'search-days-ago': '{n} days ago',
+    'search-none':     'No team found.',
+    'hist-total':      'Total saved',
+    'hist-resolved':   'Resolved',
+    'hist-accuracy':   'Accuracy',
+    'hist-empty':      'No history yet.',
+    'hist-favored':    'model favored {team} ({pct}%)',
+    'hist-mark-winner':'✓ {team} won',
+    'hist-winner-was': 'Actual winner: {team}',
+    'hist-odds':       'odds {a} / {b}',
+    'hist-avg-clv':    'Average CLV',
+    'hist-beat':       'Beat closing line',
+    'hist-roi':        'ROI (1 unit)',
+    'hist-pnl':        '{p} u. from {n} bets',
+    'hist-ll':         'Log loss model / close',
+    'hist-n':          'n = {n}',
+    'hist-need-close': 'add closing odds',
+    'hist-filter-lbl': 'Stats for',
+    'hist-filter-all': 'all saved',
+    'hist-filter-picks': 'edge picks only',
+    'hist-hint':       'CLV = odds taken × no-vig probability from the closing odds − 1. Positive CLV means you beat the closing line. Record the closing odds right before the match starts. Side = the one the model preferred when saved (higher EV). ROI and log loss only use resolved matches.',
+    'hist-side':       'Model side: <b>{team}</b> @ {o} · EV {ev}',
+    'hist-pick':       'PICK',
+    'hist-close-line': 'Close {o} (fair {f}, margin {m}%)',
+    'hist-no-odds':    'No odds, CLV cannot be computed. Add the odds at tip time.',
+    'hist-live':       'LIVE, CLV indicative only',
+    'hist-taken':      'Odds at tip A/B',
+    'hist-closing':    'Closing A/B',
+    'hist-save-odds':  'Save odds',
+    'hist-undo':       'Undo result',
+  }
+};
+
+function t(key) { return TRANSLATIONS[_lang]?.[key] ?? TRANSLATIONS['cs'][key] ?? key; }
+function tf(key, vars) {
+  let s = t(key);
+  for (const [k, v] of Object.entries(vars || {})) s = s.replaceAll(`{${k}}`, v);
+  return s;
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const HTML_I18N_KEYS = new Set(['hint-text', 'data-quality-text']);  // hist-hint is plain text
+
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (HTML_I18N_KEYS.has(key)) el.innerHTML = t(key);
+    else el.textContent = t(key);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    el.placeholder = t(el.getAttribute('data-i18n-ph'));
+  });
+}
+
+function setLang(lang) {
+  _lang = lang;
+  document.getElementById('btn-lang-cs')?.classList.toggle('active', lang === 'cs');
+  document.getElementById('btn-lang-en')?.classList.toggle('active', lang === 'en');
+  applyLang();
+  renderModelStatus();
+  // dynamically built content is not covered by the data-i18n sweep
+  if (document.getElementById('results').style.display !== 'none' && window._lastResult) renderResults(window._lastResult);
+  if (document.getElementById('tab-history').style.display !== 'none') renderHistoryTab();
+  renderTable();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PURE LOGIC (no DOM) - kept together so it can be unit-tested
+// ═══════════════════════════════════════════════════════════════════
+// ==PURE-START==
+// Lineup effect is DIRECTIONAL: a stand-in makes that team weaker, so we subtract Elo points from its rating.
+// These constants are first guesses and should be calibrated (see backtest.py, step 2).
+const STANDIN_ELO = 25;      // per player in the last match who is not in the current roster
+const THIN_ELO = 10;         // per rostered player with <5 games for the team
+const MAX_LINEUP_ELO = 160;
+const H2H_MIN_CORE = 3;      // H2H counts only if >=3 of the current 5 played for that side
+const H2H_MAX_FETCH = 8;     // newest H2H matches inspected (1 API call each)
+const FORM_WEIGHT = 0;       // backtest (15k maps): form correction made series predictions WORSE -> off
+const H2H_WEIGHT = 0;        // backtest: raw H2H gave no gain -> off (set >0 to re-enable; costs extra API calls)
+const FORM_ATTENUATION = 0.5;
+const STALE_DAYS = 45;
+const MIN_TEAM_GAMES = 20;     // fewer maps in the data -> rating not settled, no pick
+const MIN_PLAYER_GAMES = 15;
+const MAX_MARKET_GAP = 0.15;  // model vs no-vig market on the series; bigger gap -> no pick, check manually   // average maps per player in the backtest data
+
+/**
+ * parseOdds - parses text copied from the bookmaker page. Layout per match:
+ *   "Team A - Team B", optional live score "0:1", a line with start time +
+ *   "lepšie z N máp" (or "Lepšie z 3 | 2. mapa" when live), "+N" (market count),
+ *   then optionally two decimal odds. Matches without odds are kept (odds = null).
+ */
+function parseOdds(text) {
+  const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const isDotaLine = l => /dota\s*2$/i.test(l);
+  const isMatchLine = l => !isDotaLine(l) && !/^\d{1,2}\.\s?\d{1,2}\.\s?\d{4}/.test(l) && !/v[ií]ťaz/i.test(l) && /\s[-–—]\s/.test(l)
+      && !/^\d+:\d+$/.test(l) && !/lep\S*\s+z\S*\s+\d/i.test(l);
+  const out = [];
+  let league = '';
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (isDotaLine(l)) {
+      if (l.includes(',')) league = l.replace(/,?\s*dota\s*2$/i, '').trim();
+      continue;
+    }
+    if (!isMatchLine(l)) continue;
+    const parts = l.split(/\s[-–—]\s/).map(s => s.trim());
+    if (parts.length !== 2 || !parts[0] || !parts[1]) continue;
+    const m = { league, a: parts[0], b: parts[1], score: null, when: '', bo: 3, live: false, mapNo: null, oddsA: null, oddsB: null };
+    const dec = [];
+    let j = i + 1;
+    let afterPlus = false;
+    while (j < lines.length && !isMatchLine(lines[j]) && !isDotaLine(lines[j])) {
+      const s = lines[j];
+      const isDec = /^\d+[.,]\d{1,3}$/.test(s);
+      // block ends after "+N" and the decimals right behind it (stops it eating another bookmaker's text)
+      if (afterPlus && !isDec) break;
+      if (dec.length >= 2) break;
+      if (/^\+\d+$/.test(s)) afterPlus = true;
+      const sc = s.match(/^(\d):(\d)$/);
+      const bo = s.match(/lep\S*\s+z\S*\s+(\d)/i);
+      if (sc) { m.score = [Number(sc[1]), Number(sc[2])]; m.live = true; }
+      else if (bo) {
+        m.bo = Number(bo[1]);
+        const mapM = s.match(/(\d+)\.\s*map/i);
+        if (mapM) { m.mapNo = Number(mapM[1]); m.live = true; }
+        m.when = s.split(/lep/i)[0].replace(/[|\s]+$/, '').trim();
+      }
+      else if (/^\d+[.,]\d{1,3}$/.test(s)) dec.push(parseFloat(s.replace(',', '.')));
+      j++;
+    }
+    if (dec.length >= 2 && dec[0] > 1 && dec[1] > 1) { m.oddsA = dec[0]; m.oddsB = dec[1]; }
+    out.push(m);
+    i = j - 1;
+  }
+  return out;
+}
+
+/**
+ * parseOddsNike - Nike.sk layout. Prematch: time line "15:00", then "[1.35Natus Vincere2.86OG](url)"
+ * (odds glued to names, link optional). Live: "[Prime Legion1 : 0Freedom Fighters Team](url)",
+ * "2. mapa", "(24:12,9:10)", "live", then "1.21Prime Legion3.75Freedom Fighters Team".
+ * Any other plain line is taken as the league name. Nike does not show the format, Bo3 is assumed.
+ */
+function parseOddsNike(text) {
+  const strip = l => l.replace(/^\[(.*)\]\([^)]*\)$/, '$1').trim();
+  const L = text.split(/\r?\n/).map(x => strip(x.trim())).filter(Boolean);
+  const oddsRe = /^(\d{1,3}[.,]\d{2})(\S.*?)(\d{1,3}[.,]\d{2})(\S.*)$/;   // glued: "1.35Natus Vincere2.86OG"
+  const liveRe = /^(\S.*?)(\d+)\s*:\s*(\d+)(\D.*)$/;                       // glued: "Prime Legion1 : 0Freedom..."
+  const isOdds = x => /^\d{1,3}[.,]\d{2}$/.test(x || '');
+  const isScore = x => /^\d+\s*:\s*\d+$/.test(x || '') && !/^\d{1,2}:\d{2}$/.test(x || '');
+  const isSkip = x => /^\+\d+$/.test(x) || /^live$/i.test(x) || /^\(.*\)$/.test(x)
+    || /v[ií]ťaz|ďalšie|vitaz|dalsie|^z[aá]pas\b/i.test(x);
+  const isDate = x => /^\d{1,2}\.\s?\d{1,2}\.\s?\d{4}/.test(x);
+  const isTime = x => /^\d{1,2}:\d{2}$/.test(x);
+  const isMap = x => /^\d+\.\s*map/i.test(x);
+  const isNoise = x => /\svs\.?\s/i.test(x) || /^\d{1,3}$/.test(x) || /[|]/.test(x)
+    || /^(pondelok|utorok|streda|štvrtok|stvrtok|piatok|sobota|nedeľa|nedela|pondělí|úterý|středa|čtvrtek|pátek|neděle|dnes|zajtra|zítra)\b/i.test(x)
+    || /\s[-–]\s/.test(x);
+  const isName = x => !!x && !isOdds(x) && !isSkip(x) && !isDate(x) && !isTime(x) && !isMap(x) && !isScore(x) && !isNoise(x);
+  const num = x => parseFloat(x.replace(',', '.'));
+  const out = [];
+  let league = '', date = '', time = '', live = null;
+  const flushLive = () => { if (live) { out.push(live); live = null; } };
+  const addOdds = (a, b, oA, oB) => {
+    if (live && normName(live.a) === normName(a) && normName(live.b) === normName(b)) {
+      live.oddsA = oA; live.oddsB = oB; flushLive();
+    } else {
+      flushLive();
+      out.push({ league, a, b, score: null, when: [date, time].filter(Boolean).join(' | '), bo: 3, live: false, mapNo: null, oddsA: oA, oddsB: oB });
+    }
+  };
+  const startLive = (a, b, sa, sb) => {
+    flushLive();
+    live = { league, a, b, score: [sa, sb], when: '', bo: 3, live: true, mapNo: null, oddsA: null, oddsB: null };
+  };
+  for (let i = 0; i < L.length; i++) {
+    const l = L[i];
+    let m;
+    if (isSkip(l)) continue;
+    if (isDate(l)) { date = l.match(/^(\d{1,2}\.\s?\d{1,2}\.\s?\d{4})/)[1].replace(/\s/g, ''); continue; }
+    if (isTime(l)) { time = l; continue; }
+    if (isMap(l)) { if (live) live.mapNo = Number(l.match(/^(\d+)/)[1]); continue; }
+    // split lines: odds / team A / odds / team B
+    if (isOdds(l) && isName(L[i + 1]) && isOdds(L[i + 2]) && isName(L[i + 3]) && (isTime(L[i - 1] || '') || /^live$/i.test(L[i - 1] || ''))) {
+      addOdds(L[i + 1], L[i + 3], num(l), num(L[i + 2])); i += 3; continue;
+    }
+    if ((m = l.match(oddsRe))) { addOdds(m[2].trim(), m[4].trim(), num(m[1]), num(m[3])); continue; }
+    // split lines: team A / "1 : 0" / team B
+    if (isName(l) && isScore(L[i + 1]) && isName(L[i + 2])) {
+      const sc = L[i + 1].split(':').map(x => Number(x.trim()));
+      startLive(l, L[i + 2], sc[0], sc[1]); i += 2; continue;
+    }
+    if ((m = l.match(liveRe)) && !/\d{1,3}[.,]\d{2}/.test(l)) { startLive(m[1].trim(), m[4].trim(), Number(m[2]), Number(m[3])); continue; }
+    if (isOdds(l) || isNoise(l)) continue;
+    flushLive();
+    league = l.replace(/,?\s*dota\s*2$/i, '').trim();
+  }
+  flushLive();
+  return out.filter(x => x.a && x.b && (x.oddsA === null || (x.oddsA > 1 && x.oddsB > 1)));
+}
+
+/**
+ * parseOddsDoxx - Doxxbet layout: "23.11.2026 - PONDELOK", column headers "1"/"2",
+ * "pondelok15:00" (day glued to time), "Natus Vincere vs. OG", then two decimal odds.
+ * No league or format shown, Bo3 is assumed.
+ */
+function parseOddsDoxx(text) {
+  const L = text.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+  const vsRe = /^(.+?)\s+vs\.?\s+(.+)$/i;
+  const isOdds = x => /^\d{1,3}[.,]\d{2}$/.test(x || '');
+  const num = x => parseFloat(x.replace(',', '.'));
+  const out = [];
+  let date = '', time = '', m;
+  for (let i = 0; i < L.length; i++) {
+    const l = L[i];
+    if ((m = l.match(/^(\d{1,2}\.\s?\d{1,2}\.\s?\d{4})/))) { date = m[1].replace(/\s/g, ''); continue; }
+    if ((m = l.match(/^(\D*?)\s*(\d{1,2}:\d{2})$/))) { time = m[2]; continue; }
+    if ((m = l.match(vsRe)) && !isOdds(l)) {
+      const odds = [];
+      let j = i + 1;
+      while (j < L.length && odds.length < 2 && isOdds(L[j])) { odds.push(num(L[j])); j++; }
+      out.push({ league: '', a: m[1].trim(), b: m[2].trim(), score: null, when: [date, time].filter(Boolean).join(' | '),
+                 bo: 3, live: false, mapNo: null,
+                 oddsA: odds.length === 2 && odds[0] > 1 && odds[1] > 1 ? odds[0] : null,
+                 oddsB: odds.length === 2 && odds[0] > 1 && odds[1] > 1 ? odds[1] : null });
+      i = j - 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * cleanName - removes bookmaker UI noise glued to team names:
+ * "OG1 tiket" -> "OG" (bet-slip counter), "T.GamerLegion" -> "Team GamerLegion".
+ */
+function cleanName(x) {
+  return String(x || '')
+    .replace(/\s*\d{0,3}\s*(tiket\w*|tickets?|tipov\w*)\s*$/i, '')
+    .replace(/^T\.\s*/, 'Team ')
+    .replace(/\s+/g, ' ').trim();
+}
+const cleanArr = arr => arr.map(x => ({ ...x, a: cleanName(x.a), b: cleanName(x.b) }));
+
+/**
+ * parseOddsFortuna - ifortuna.sk layout (each line usually a markdown link, links optional):
+ *   league (plain line), status ("dnes 18:00" prematch or "3. mapa" live), team A, team B,
+ *   live map score glued ("11" = 1:1), "Víťaz zápasu", A, odds, B, odds,
+ *   then per-map markets "Víťaz 1. mapy"... which are ignored.
+ */
+function parseOddsFortuna(text) {
+  const strip = l => l.replace(/^\[(.*)\]\([^)]*\)$/, '$1').trim();
+  const L = text.split(/\r?\n/).map(x => strip(x.trim())).filter(Boolean);
+  const isOdds = x => /^\d{1,3}[.,]\d{2}$/.test(x || '');
+  const num = x => parseFloat(x.replace(',', '.'));
+  const isLiveSt = x => /^\d\.\s*mapa$/i.test(x || '');
+  const isTimeSt = x => /^(dnes|zajtra|zítra|dnešok|\d{1,2}\.\s?\d{1,2}\.?(\s?\d{4})?)\s*\d{1,2}:\d{2}$/i.test(x || '');
+  const isStatus = x => isLiveSt(x) || isTimeSt(x);
+  const isMarket = x => /v[ií]ťaz|vítěz/i.test(x || '');
+  const out = [];
+  let league = '', cur = null;
+  for (let i = 0; i < L.length; i++) {
+    const l = L[i];
+    if (isStatus(l) && L[i + 1] && L[i + 2] && !isOdds(L[i + 1]) && !isOdds(L[i + 2]) && !isMarket(L[i + 1])) {
+      // the line before a match block is the league, unless it is an odds line of the previous block
+      if (i > 0 && !isOdds(L[i - 1]) && !isMarket(L[i - 1]) && !isStatus(L[i - 1])) league = L[i - 1];
+      cur = { league, a: L[i + 1], b: L[i + 2], score: null, when: '', bo: 3, live: false, mapNo: null, oddsA: null, oddsB: null };
+      if (isLiveSt(l)) {
+        cur.live = true; cur.mapNo = Number(l[0]);
+        const sc = L[i + 3];
+        if (/^\d{2}$/.test(sc || '')) { cur.score = [Number(sc[0]), Number(sc[1])]; i++; }
+      } else cur.when = l;
+      out.push(cur);
+      i += 2;
+      continue;
+    }
+    if (cur && cur.oddsA === null && /^v[ií]ťaz z[aá]pasu$|^vítěz zápasu$/i.test(l)
+        && !isOdds(L[i + 1]) && isOdds(L[i + 2]) && !isOdds(L[i + 3]) && isOdds(L[i + 4])) {
+      const k = x => coreName(x) || normName(x);
+      const [n1, o1, n2, o2] = [L[i + 1], num(L[i + 2]), L[i + 3], num(L[i + 4])];
+      const A = k(cur.a), B = k(cur.b);
+      if (k(n1) === A && k(n2) === B) { cur.oddsA = o1; cur.oddsB = o2; i += 4; }
+      else if (k(n1) === B && k(n2) === A) { cur.oddsA = o2; cur.oddsB = o1; i += 4; }
+    }
+  }
+  return out.filter(x => x.oddsA === null || (x.oddsA > 1 && x.oddsB > 1));
+}
+
+/** Try every known bookmaker layout and keep the one that found the most priced matches. */
+function parseAny(text) {
+  const score = arr => arr.filter(x => x.oddsA).length * 10 + arr.length;
+  return [parseOdds(text), parseOddsNike(text), parseOddsDoxx(text), parseOddsFortuna(text)].map(cleanArr)
+    .reduce((best, cur) => score(cur) > score(best) ? cur : best);
+}
+
+/**
+ * parseMulti - several bookmakers pasted one under another.
+ *  - Optional explicit split: a line "@Name" starts a new bookmaker block (any layout inside).
+ *  - Otherwise every known layout is parsed over the whole text; each layout that finds priced
+ *    matches counts as one bookmaker, named Maker1, Maker2... in order of appearance.
+ * Same match from different books is merged (names compared without "Team/Gaming/Esports",
+ * swapped home/away handled). Row odds = best price per side; all prices kept in row.books.
+ */
+// Each page layout belongs to one bookmaker, so the layout identifies it (a line "@Name" still overrides).
+const BOOK_NAMES = ['Tipsport', 'Nike', 'Doxxbet', 'Fortuna'];
+
+function parseMulti(text) {
+  const lines = text.split(/\r?\n/);
+  let segs = [];
+  if (lines.some(l => /^@\s*\S/.test(l.trim()))) {
+    let cur = null;
+    lines.forEach(l => {
+      const m = l.trim().match(/^@\s*(.+)$/);
+      if (m) { cur = { name: m[1].trim(), text: '' }; segs.push(cur); }
+      else if (cur) cur.text += l + '\n';
+    });
+    segs = segs.map(sg => ({ name: sg.name, arr: parseAny(sg.text) }));
+  } else {
+    const priced = a => a.filter(x => x.oddsA);
+    // position of each layout's first typical line, so Maker1 = the block pasted first
+    const sig = [/lep\S*\s+z\S*\s+\d/i,
+                 /^\s*\d{1,2}:\d{2}\s*\n\s*\[?\d{1,3}[.,]\d{2}/im,          // Nike: time line, then odds
+                 /\S\s+vs\.?\s+\S/i,
+                 /v[ií]ťaz \d\.\s*mapy/i];                                 // Fortuna: per-map markets
+    const found = [parseOdds(text), parseOddsNike(text), parseOddsDoxx(text), parseOddsFortuna(text)].map(cleanArr).map(priced)
+      .map((arr, i) => ({ arr, name: BOOK_NAMES[i], pos: (p => p < 0 ? Infinity : p)(text.search(sig[i])) })).filter(x => x.arr.length);
+    if (!found.length) return parseAny(text).map(x => ({ ...x, books: [] }));
+    found.sort((x, y) => x.pos - y.pos);
+    // a single bookmaker keeps its unpriced matches too
+    if (found.length === 1) {
+      const i = BOOK_NAMES.indexOf(found[0].name);
+      found[0].arr = cleanArr([parseOdds, parseOddsNike, parseOddsDoxx, parseOddsFortuna][i](text));
+    }
+    segs = found.map(f => ({ name: f.name, arr: f.arr }));
+  }
+  return mergeBooks(segs);
+}
+
+function mergeBooks(segs) {
+  const k = x => coreName(x) || normName(x);
+  const eq = (x, y) => x === y || (Math.min(x.length, y.length) >= 5 && (x.includes(y) || y.includes(x)));
+  const rowsOut = [];
+  segs.forEach(sg => sg.arr.forEach(m => {
+    const ka = k(m.a), kb = k(m.b);
+    // looser match for different spellings ("Pari Parni" / "Parivision"): same kick-off time,
+    // one team identical and the other sharing the first 4 letters
+    const pre = (x, y) => x.length >= 4 && y.length >= 4 && x.slice(0, 4) === y.slice(0, 4);
+    const slot = r => m.when && r.when && m.when === r.when;
+    const near = (x, y, r) => eq(x, y) || (slot(r) && pre(x, y));
+    // live and pre-match prices of the same match are not comparable -> kept in separate rows
+    const sameState = r => !!r.live === !!m.live;
+    const exact = r => (eq(ka, r._ka) && eq(kb, r._kb)) || (eq(ka, r._kb) && eq(kb, r._ka));
+    const loose = r => (eq(ka, r._ka) && near(kb, r._kb, r)) || (near(ka, r._ka, r) && eq(kb, r._kb))
+                    || (eq(ka, r._kb) && near(kb, r._ka, r)) || (near(ka, r._kb, r) && eq(kb, r._ka));
+    let row = rowsOut.find(r => sameState(r) && exact(r)) || rowsOut.find(r => sameState(r) && loose(r));
+    if (!row) {
+      row = { ...m, oddsA: null, oddsB: null, books: [], _ka: ka, _kb: kb, namesA: [], namesB: [] };
+      rowsOut.push(row);
+    }
+    const same = eq(ka, row._ka) || eq(kb, row._kb) || (pre(ka, row._ka) && pre(kb, row._kb));
+    if (m.live && !row.live) {   // (only for rows created live; kept for safety)
+      row.live = true; row.mapNo = m.mapNo;
+      row.score = m.score ? (same ? m.score : [m.score[1], m.score[0]]) : null;
+    }
+    const [na, nb] = same ? [m.a, m.b] : [m.b, m.a];
+    if (!row.namesA.includes(na)) row.namesA.push(na);
+    if (!row.namesB.includes(nb)) row.namesB.push(nb);
+    if (!row.league && m.league) row.league = m.league;
+    if (!row.when && m.when) row.when = m.when;
+    if (m.oddsA) row.books.push({ name: sg.name, a: same ? m.oddsA : m.oddsB, b: same ? m.oddsB : m.oddsA });
+  }));
+  rowsOut.forEach(r => {
+    delete r._ka; delete r._kb;
+    if (!r.books.length) return;
+    const bestA = r.books.reduce((x, y) => y.a > x.a ? y : x);
+    const bestB = r.books.reduce((x, y) => y.b > x.b ? y : x);
+    r.oddsA = bestA.a; r.oddsB = bestB.b; r.bestA = bestA.name; r.bestB = bestB.name;
+  });
+  return rowsOut;
+}
+
+/** Per-bookmaker summary: average margin and how often it had the best price on a side. */
+function bookStats(rowsIn) {
+  const st = {};
+  rowsIn.forEach(r => {
+    if (!r.books || r.books.length < 2) return;
+    r.books.forEach(b => {
+      const s0 = st[b.name] || (st[b.name] = { n: 0, marg: 0, best: 0 });
+      s0.n++; s0.marg += 1 / b.a + 1 / b.b - 1;
+      if (b.a === r.oddsA) s0.best++;
+      if (b.b === r.oddsB) s0.best++;
+    });
+  });
+  return Object.entries(st).map(([name, v]) => ({ name, n: v.n, margin: v.marg / v.n, best: v.best }));
+}
+
+/** P(A wins series) from per-map probability p, current map score and best-of N. */
+function seriesProb(p, wa = 0, wb = 0, bo = 3) {
+  const need = Math.floor(bo / 2) + 1;
+  const memo = {};
+  const f = (a, b) => {
+    if (a >= need) return 1;
+    if (b >= need) return 0;
+    const k = a + ',' + b;
+    if (k in memo) return memo[k];
+    return (memo[k] = p * f(a + 1, b) + (1 - p) * f(a, b + 1));
+  };
+  return f(wa, wb);
+}
+
+/** Margin, no-vig probabilities and EV per unit stake for both sides. */
+function computeEdge(ps, oA, oB) {
+  if (!oA || !oB) return null;
+  const iA = 1 / oA, iB = 1 / oB, sum = iA + iB;
+  const evA = ps * oA - 1, evB = (1 - ps) * oB - 1;
+  const side = evA >= evB ? 'a' : 'b';
+  return { margin: sum - 1, nvA: iA / sum, nvB: iB / sum, evA, evB, side, bestEv: Math.max(evA, evB) };
+}
+
+const normName = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const coreName = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  .replace(/\b(team|esports?|gaming|club)\b/g, '').replace(/[^a-z0-9]/g, '');
+
+/** Map a bookmaker team name onto an OpenDota team (most recently active wins ties). */
+function resolveTeam(name, teams) {
+  const n = normName(name), c = coreName(name);
+  const best = arr => [...arr].sort((a, b) => (b.last_match_time || 0) - (a.last_match_time || 0) || (b.rating || 0) - (a.rating || 0))[0];
+  let m = teams.filter(tm => normName(tm.name) === n);
+  if (m.length) return { team: best(m), how: 'exact' };
+  m = teams.filter(tm => tm.tag && normName(tm.tag) === n);
+  if (m.length) return { team: best(m), how: 'fuzzy' };
+  if (c.length >= 2) {
+    m = teams.filter(tm => coreName(tm.name) === c);
+    if (m.length) return { team: best(m), how: 'fuzzy' };
+  }
+  if (n.length >= 4) {
+    m = teams.filter(tm => { const x = normName(tm.name); return x.length >= 4 && (x.includes(n) || n.includes(x)); });
+    if (m.length) return { team: best(m), how: 'fuzzy' };
+  }
+  return { team: null, how: 'none' };
+}
+
+function recencyWeight(daysAgo) {
+  if (daysAgo == null) return 0.5;
+  if (daysAgo <= 14) return 1.0;
+  if (daysAgo >= 90) return 0.25;
+  return 1.0 - (daysAgo - 14) / 76 * 0.75;
+}
+
+function computeEloBaseline(ratingA, ratingB) {
+  if (typeof ratingA !== 'number' || typeof ratingB !== 'number') return null;
+  return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+}
+
+/** h2hRows: [{start_time, aWon}] from team A's perspective. */
+function computeH2HAdjust(h2hRows) {
+  if (!h2hRows.length) return null;
+  const now = Date.now() / 1000;
+  let scoreA = 0, totalWeight = 0;
+  h2hRows.forEach(r => {
+    const w = recencyWeight((now - r.start_time) / 86400);
+    scoreA += (r.aWon ? 1 : 0) * w;
+    totalWeight += w;
+  });
+  if (totalWeight === 0) return null;
+  const winRateA = scoreA / totalWeight;
+  const adjust = Math.max(-8, Math.min(8, Math.round((winRateA - 0.5) * 40)));
+  return { adjust, matchesFound: h2hRows.length, winRateA };
+}
+
+function computeRecentForm(matches, n = 5) {
+  const recent = matches.slice(0, n);
+  if (!recent.length) return null;
+  return { wins: recent.filter(m => m.radiant_win === m.radiant).length, total: recent.length };
+}
+
+function computeFormAdjust(formA, formB) {
+  if (!formA && !formB) return null;
+  const wrA = formA ? formA.wins / formA.total : 0.5;
+  const wrB = formB ? formB.wins / formB.total : 0.5;
+  const adjust = Math.max(-8, Math.min(8, Math.round((wrA - wrB) * 20)));
+  return adjust === 0 ? null : { adjust, formA, formB };
+}
+
+function combineAdjustments(h2hAdjust, formAdjust) {
+  const h = (h2hAdjust?.adjust || 0) * H2H_WEIGHT;
+  const f = (formAdjust?.adjust || 0) * FORM_WEIGHT;
+  let raw, wasAttenuated = false;
+  if (h !== 0 && f !== 0 && Math.sign(h) === Math.sign(f)) {
+    const larger = Math.abs(h) >= Math.abs(f) ? h : f;
+    const smaller = Math.abs(h) >= Math.abs(f) ? f : h;
+    raw = larger + smaller * FORM_ATTENUATION;
+    wasAttenuated = true;
+  } else raw = h + f;
+  return { value: Math.round(Math.max(-15, Math.min(15, raw))), wasAttenuated };
+}
+
+/**
+ * Lineup signal: who ACTUALLY played the last match vs the team's current roster.
+ *  - stand-ins (played, not on roster) -> STANDIN_ELO each
+ *  - rostered players with <5 games for the team -> THIN_ELO each
+ * Returns an Elo-point penalty to subtract from that team's rating.
+ */
+function computeLineupSignal(teamPlayers, lastMatchPlayerIds) {
+  if (!teamPlayers || !lastMatchPlayerIds || !lastMatchPlayerIds.length) return null;
+  const currentMembers = teamPlayers.filter(p => p.is_current_team_member);
+  if (!currentMembers.length) return null; // no roster data at all: do not raise a false alarm
+  const currentIds = new Set(currentMembers.map(p => p.account_id));
+  const actualIds = [...new Set(lastMatchPlayerIds)];
+  const standIns = actualIds.filter(id => !currentIds.has(id));
+  const thin = actualIds
+    .filter(id => currentIds.has(id))
+    .map(id => teamPlayers.find(p => p.account_id === id))
+    .filter(p => p && p.games_played != null && p.games_played < 5);
+  if (!standIns.length && !thin.length) return null;
+  const eloPenalty = Math.min(MAX_LINEUP_ELO, standIns.length * STANDIN_ELO + thin.length * THIN_ELO);
+  return {
+    rosterMismatchCount: standIns.length,
+    thinHistoryPlayers: thin.map(p => ({ account_id: p.account_id, games_played: p.games_played })),
+    eloPenalty,
+    tier: standIns.length ? 'rosterChange' : 'inactivity'
+  };
+}
+
+/** True when at least `min` of the current core played on this side of a past match. Unknown core = pass. */
+function sameCore(coreIds, sideIds, min = H2H_MIN_CORE) {
+  if (!coreIds || !coreIds.length) return true;
+  const side = new Set(sideIds);
+  return coreIds.filter(id => side.has(id)).length >= min;
+}
+/**
+ * playerModelP - per-map win probability from the backtest export (player_ratings.json).
+ * Team strength = mean rating of the players who ACTUALLY played the last match (stand-ins are
+ * therefore priced in directly), blended with the team Elo using the weight fitted in the backtest.
+ * Returns null (fall back to OpenDota team rating) when fewer than 3 players per side are known.
+ */
+function playerModelP(model, idsA, idsB, teamIdA, teamIdB) {
+  if (!model || !model.players || !idsA || !idsB) return null;
+  const known = ids => ids.map(i => model.players[i]).filter(x => typeof x === 'number');
+  const ka = known(idsA), kb = known(idsB);
+  if (ka.length < 3 || kb.length < 3) return null;
+  const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+  const dPl = mean(ka) - mean(kb);
+  const ta = model.teams?.[teamIdA], tb = model.teams?.[teamIdB];
+  const usedTeam = typeof ta === 'number' && typeof tb === 'number';
+  const dTeam = usedTeam ? ta - tb : dPl;
+  const w = typeof model.w === 'number' ? model.w : 0.5;
+  const diff = w * dTeam + (1 - w) * dPl;
+  let p = 1 / (1 + Math.pow(10, -diff / (model.scale || 400)));
+  const a = typeof model.calib === 'number' ? model.calib : 1;     // fitted in backtest (a > 1 sharpens)
+  if (a !== 1) { const lg = Math.log(p / (1 - p)); p = 1 / (1 + Math.exp(-a * lg)); }
+  // how established are the players' ratings (games in the backtest data); null when the export lacks it
+  const exp = ids => {
+    if (!model.pgames) return null;
+    const g = ids.map(i => model.pgames[i]).filter(x => typeof x === 'number');
+    return g.length ? Math.round(g.reduce((s, x) => s + x, 0) / g.length) : 0;
+  };
+  return { p, nA: ka.length, nB: kb.length, usedTeam, gA: exp(idsA), gB: exp(idsB) };
+}
+/**
+ * CLV for a saved record. Side = the one the model preferred at save time (higher EV).
+ * CLV = taken odds x closing no-vig probability - 1  (> 0 means you beat the closing line).
+ */
+function clvOf(rec) {
+  const o = rec.odds, c = rec.close;
+  if (!o || !o.a || !o.b) return null;
+  const side = rec.side || computeEdge(rec.p1, o.a, o.b).side;
+  const taken = side === 'a' ? o.a : o.b;
+  const res = { side, taken, ev: rec.p1 != null ? (side === 'a' ? rec.p1 : 1 - rec.p1) * taken - 1 : null };
+  if (!c || !c.a || !c.b) return res;
+  const ia = 1 / c.a, ib = 1 / c.b, sum = ia + ib;
+  const q = (side === 'a' ? ia : ib) / sum;
+  return { ...res, closeSide: side === 'a' ? c.a : c.b, closeNv: q, fairClose: 1 / q,
+           clv: taken * q - 1, move: taken / (side === 'a' ? c.a : c.b) - 1, closeNvA: ia / sum, closeMargin: sum - 1 };
+}
+
+/** Aggregates: accuracy, CLV, flat-stake P&L of the preferred side, log loss model vs closing line. */
+function histSummary(recs) {
+  const resolved = recs.filter(r => r.winner);
+  const correct = resolved.filter(r => (r.p1 >= 0.5) === (r.winner === 'a')).length;
+  const withClv = recs.map(r => ({ r, c: clvOf(r) })).filter(x => x.c && x.c.clv != null);
+  const avgClv = withClv.length ? withClv.reduce((s, x) => s + x.c.clv, 0) / withClv.length : null;
+  const beat = withClv.length ? withClv.filter(x => x.c.clv > 0).length / withClv.length : null;
+  let staked = 0, pnl = 0;
+  resolved.forEach(r => { const c = clvOf(r); if (!c) return; staked += 1; pnl += (r.winner === c.side) ? c.taken - 1 : -1; });
+  const ll = p => -Math.log(Math.min(1 - 1e-6, Math.max(1e-6, p)));
+  const cmp = resolved.map(r => ({ r, c: clvOf(r) })).filter(x => x.c && x.c.closeNvA != null);
+  const llModel = cmp.length ? cmp.reduce((s, x) => s + ll(x.r.winner === 'a' ? x.r.p1 : 1 - x.r.p1), 0) / cmp.length : null;
+  const llClose = cmp.length ? cmp.reduce((s, x) => s + ll(x.r.winner === 'a' ? x.c.closeNvA : 1 - x.c.closeNvA), 0) / cmp.length : null;
+  return { n: recs.length, resolved: resolved.length, accuracy: resolved.length ? correct / resolved.length : null,
+           nClv: withClv.length, avgClv, beat, staked, pnl, roi: staked ? pnl / staked : null,
+           nCmp: cmp.length, llModel, llClose };
+}
+/** Probability of every final series score from per-map p, current score and best-of. */
+function seriesDist(p, wa = 0, wb = 0, bo = 3) {
+  const need = Math.floor(bo / 2) + 1;
+  const out = {};
+  const go = (a, b, pr) => {
+    if (a === need || b === need) { const k = a + ':' + b; out[k] = (out[k] || 0) + pr; return; }
+    go(a + 1, b, pr * p); go(a, b + 1, pr * (1 - p));
+  };
+  go(wa, wb, 1);
+  return Object.entries(out).map(([k, pr]) => ({ k, a: Number(k.split(':')[0]), b: Number(k.split(':')[1]), p: pr }))
+    .sort((x, y) => (y.a - y.b) - (x.a - x.b));
+}
+
+/** Map handicap, total maps and correct score markets derived from the series distribution. */
+function mapMarkets(p, wa, wb, bo) {
+  const d = seriesDist(p, wa, wb, bo);
+  const P = f => d.filter(f).reduce((s, x) => s + x.p, 0);
+  const hcp = [], tot = [];
+  const lines = bo === 5 ? [1.5, 2.5] : bo === 3 ? [1.5] : [];
+  lines.forEach(h => {
+    const aMinus = P(x => x.a - x.b > h), bMinus = P(x => x.b - x.a > h);
+    hcp.push({ key: 'hA-' + h, side: 'a', h: -h, p: aMinus }, { key: 'hB+' + h, side: 'b', h: +h, p: 1 - aMinus },
+             { key: 'hB-' + h, side: 'b', h: -h, p: bMinus }, { key: 'hA+' + h, side: 'a', h: +h, p: 1 - bMinus });
+  });
+  const totLines = bo === 5 ? [3.5, 4.5] : bo === 3 ? [2.5] : [];
+  totLines.forEach(l => {
+    const over = P(x => x.a + x.b > l);
+    tot.push({ key: 'o' + l, over: true, l, p: over }, { key: 'u' + l, over: false, l, p: 1 - over });
+  });
+  return { scores: d, hcp, tot };
+}
+
+const normCdf = x => {   // Abramowitz-Stegun erf approximation, |error| < 1.5e-7
+  const t = 1 / (1 + 0.3275911 * Math.abs(x) / Math.SQRT2);
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x / 2);
+  return x >= 0 ? 0.5 * (1 + y) : 0.5 * (1 - y);
+};
+
+/** Expected total kills and map length (minutes) per map from the backtest export (model.kd). */
+function kdPredict(kd, idA, idB) {
+  if (!kd || !kd.teams) return null;
+  const est = id => {
+    const s = kd.teams[id] || { w: 0, kf: 0, ka: 0, dur: 0 };
+    const k = kd.kshr;
+    return { tot: (s.kf + s.ka + k * kd.league_tot) / (s.w + k), dur: (s.dur + k * kd.league_dur) / (s.w + k), w: s.w, known: !!kd.teams[id] };
+  };
+  const A = est(idA), B = est(idB);
+  return {
+    tot: kd.league_tot + kd.beta_tot * ((A.tot - kd.league_tot) + (B.tot - kd.league_tot)),
+    dur: kd.league_dur + kd.beta_dur * ((A.dur - kd.league_dur) + (B.dur - kd.league_dur)),
+    sdTot: kd.sd_tot, sdDur: kd.sd_dur, wA: A.w, wB: B.w, knownA: A.known, knownB: B.known
+  };
+}
+const pOver = (mean, sd, line) => 1 - normCdf((line - mean) / sd);
+/** P(over) from the backtest's empirical residual quantiles (handles the skewed map-length tail); normal as fallback. */
+function pOverKd(q, mean, sd, line) {
+  if (!Array.isArray(q) || q.length < 3) return pOver(mean, sd, line);
+  const x = line - mean, n = q.length - 1;
+  if (x <= q[0]) return 1;
+  if (x >= q[n]) return 0;
+  let lo = 0, hi = n;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (q[mid] <= x) lo = mid; else hi = mid; }
+  const span = q[hi] - q[lo];
+  return 1 - (lo + (span > 0 ? (x - q[lo]) / span : 0)) / n;
+}
+// ==PURE-END==
+
+// ═══════════════════════════════════════════════════════════════════
+// OpenDota access: throttled (60/min keyless), cached, retried
+// ═══════════════════════════════════════════════════════════════════
+const MIN_GAP_MS = 1100;
+let _lastReq = 0, _chain = Promise.resolve();
+const _respCache = new Map();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function throttled(fn) {
+  const run = _chain.then(async () => {
+    const wait = Math.max(0, _lastReq + MIN_GAP_MS - Date.now());
+    if (wait) await sleep(wait);
+    _lastReq = Date.now();
+    return fn();
+  });
+  _chain = run.catch(() => {});
+  return run;
+}
+
+// Circuit breaker: after 3 network failures in a row OpenDota is treated as down for this run,
+// so the remaining rows fail fast (or use the offline model) instead of waiting on retries.
+let _netFails = 0, _odDown = false;
+
+function odGet(path) {
+  if (_respCache.has(path)) return _respCache.get(path);
+  if (_odDown) return Promise.reject(new Error(t('od-down')));
+  const p = (async () => {
+    let lastErr;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await throttled(() => Promise.race([
+          fetch(API_BASE + path),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout 60s')), 60000))
+        ]));
+        if (res.status === 429 || res.status >= 500) { lastErr = new Error(`OpenDota ${path} → HTTP ${res.status}`); await sleep(3000 * (attempt + 1)); continue; }
+        if (!res.ok) throw new Error(`OpenDota ${path} → HTTP ${res.status}`);
+        _netFails = 0;
+        return await res.json();
+      } catch (e) {
+        lastErr = /HTTP 4\d\d/.test(e.message) ? e : new Error(`${path.split('?')[0]}: network/CORS/timeout (${e.message})`);
+        if (/HTTP 4\d\d/.test(e.message)) break;
+        if (++_netFails >= 3) { _odDown = true; break; }
+        await sleep(2000);
+      }
+    }
+    throw lastErr;
+  })();
+  _respCache.set(path, p);
+  p.catch(() => _respCache.delete(path));
+  return p;
+}
+
+const getTeams = () => odGet('/teams');
+
+// The /teams list is heavy and OpenDota is sometimes down. Keep a local copy and, as a second fallback,
+// resolve names from the loaded player model (it exports team names).
+const TEAMS_CACHE_KEY = 'dota_teams_cache_v1';
+let _teamsFailed = false;
+
+function readTeamsCache() {
+  try { const o = JSON.parse(localStorage.getItem(TEAMS_CACHE_KEY) || 'null'); return o && Array.isArray(o.list) ? o : null; }
+  catch { return null; }
+}
+
+async function getTeamsSafe() {
+  if (!_teamsFailed) {
+    try {
+      const list = await getTeams();
+      try {
+        localStorage.setItem(TEAMS_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: list.map(tm => ({
+          team_id: tm.team_id, name: tm.name, tag: tm.tag, rating: tm.rating, wins: tm.wins, losses: tm.losses, last_match_time: tm.last_match_time })) }));
+      } catch {}
+      return list;
+    } catch (e) { console.warn('teams list failed', e); _teamsFailed = true; }
+  }
+  const c = readTeamsCache();
+  return c ? c.list : null;
+}
+
+/** Teams to resolve bookmaker names against: live list, else local copy, else names from the player model. */
+async function teamPool() {
+  // /teams only covers the top ~1000 teams by rating. Tier 2/3 teams (e.g. European Pro League) are
+  // often missing there but present in the player model export (all teams from recent pro matches).
+  const list = offlineOn() ? (readTeamsCache()?.list || []) : (await getTeamsSafe() || []);
+  const ids = new Set(list.map(tm => Number(tm.team_id)));
+  const fromModel = PLAYER_MODEL?.names
+    ? Object.entries(PLAYER_MODEL.names).filter(([id]) => !ids.has(Number(id)))
+        .map(([id, name]) => ({ team_id: Number(id), name, last_match_time: PLAYER_MODEL.last?.[id] || 0 }))
+    : [];
+  const pool = list.concat(fromModel);
+  return pool.length ? pool : null;
+}
+
+async function getTeamInfo(id) {
+  const list = await getTeamsSafe();
+  const hit = list && list.find(tm => Number(tm.team_id) === Number(id) && typeof tm.rating === 'number');
+  if (hit) return hit;
+  try { return await odGet(`/teams/${id}`); }
+  catch (e) {
+    const nm = PLAYER_MODEL?.names?.[id];
+    if (nm) return { team_id: Number(id), name: nm, rating: null, last_match_time: PLAYER_MODEL.last?.[id] || null };
+    throw e;
+  }
+}
+
+const _bundleCache = new Map();
+/** Everything we need about one team: info, roster, match list (newest first), lineup signal. */
+// Team data is cached in the browser for 3 hours, so a morning/evening run costs far fewer
+// OpenDota calls (keyless limit) and survives short outages.
+const BUNDLE_TTL_MS = 3 * 3600 * 1000;
+const bundleKey = id => 'dota_bundle_v1_' + id;
+
+function readBundle(id) {
+  try {
+    const o = JSON.parse(localStorage.getItem(bundleKey(id)) || 'null');
+    return o && Date.now() - o.ts < BUNDLE_TTL_MS ? o.b : null;
+  } catch { return null; }
+}
+
+function writeBundle(b) {
+  const slim = {
+    ...b,
+    players: (b.players || []).map(p => ({ account_id: p.account_id, is_current_team_member: p.is_current_team_member, games_played: p.games_played })),
+    matches: (b.matches || []).slice(0, 80).map(m => ({ match_id: m.match_id, start_time: m.start_time, radiant: m.radiant, radiant_win: m.radiant_win, opposing_team_id: m.opposing_team_id })),
+    matchCount: (b.matches || []).length,
+  };
+  try { localStorage.setItem(bundleKey(b.id), JSON.stringify({ ts: Date.now(), b: slim })); }
+  catch {   // storage full: drop old bundles and retry once
+    try {
+      Object.keys(localStorage).filter(k => k.startsWith('dota_bundle_v1_')).forEach(k => localStorage.removeItem(k));
+      localStorage.setItem(bundleKey(b.id), JSON.stringify({ ts: Date.now(), b: slim }));
+    } catch {}
+  }
+}
+
+const offlineOn = () => !!document.getElementById('offline-mode')?.checked;
+const hasLineup = id => !!PLAYER_MODEL?.lineups?.[id];
+
+/** Team bundle built only from the player model export (no API): name, last lineup, games played. */
+function offlineBundle(id) {
+  const lu = PLAYER_MODEL.lineups[id];
+  const info = { team_id: id, name: PLAYER_MODEL.names?.[id] || ('Team ' + id), rating: null,
+                 last_match_time: PLAYER_MODEL.last?.[id] || lu.t || null };
+  return { id, info, players: [], matches: [], lineup: null, lineupIds: lu.p, matchCount: PLAYER_MODEL.games?.[id] ?? 0,
+           offline: true, lineupTs: lu.t };
+}
+
+function getTeamBundle(id) {
+  id = Number(id);
+  if (offlineOn() && hasLineup(id)) return Promise.resolve(offlineBundle(id));
+  if (_bundleCache.has(id)) return _bundleCache.get(id);
+  const cached = readBundle(id);
+  if (cached) { const pc = Promise.resolve(cached); _bundleCache.set(id, pc); return pc; }
+  const p = (async () => {
+    const info = await getTeamInfo(id);
+    const [players, matchesRaw] = await Promise.all([odGet(`/teams/${id}/players`), odGet(`/teams/${id}/matches`)]);
+    const matches = [...matchesRaw].sort((a, b) => b.start_time - a.start_time);
+    let lineup = null, lineupIds = [];
+    if (matches.length) {
+      try {
+        const lm = await odGet(`/matches/${matches[0].match_id}`);
+        lineupIds = (lm.players || [])
+          .filter(pl => (pl.isRadiant ? lm.radiant_team_id : lm.dire_team_id) == id)
+          .map(pl => pl.account_id).filter(Boolean);
+        lineup = computeLineupSignal(players, lineupIds);
+      } catch (e) { console.warn('lineup check failed', e); }
+    }
+    const bundle = { id, info, players, matches, lineup, lineupIds, matchCount: matches.length };
+    writeBundle(bundle);
+    return bundle;
+  })();
+  _bundleCache.set(id, p);
+  p.catch(() => _bundleCache.delete(id));
+  // OpenDota failed -> fall back to the offline model data when we have it
+  return p.catch(e => { if (hasLineup(id)) return offlineBundle(id); throw e; });
+}
+
+/**
+ * analyzePair - full model for one pairing.
+ * Base: player model from backtest.py when loaded (and >=3 known players per side), otherwise the
+ * OpenDota team rating minus a directional lineup penalty. Form and H2H are weighted 0 by default
+ * (backtest showed they add noise). Per-map probability is converted to series probability.
+ */
+async function analyzePair(idA, idB, { bo = 3, wa = 0, wb = 0 } = {}) {
+  const [A, B] = await Promise.all([getTeamBundle(idA), getTeamBundle(idB)]);
+
+  const rA = A.info.rating, rB = B.info.rating;
+  const eloP1 = computeEloBaseline(rA, rB);                       // OpenDota rating, for the note
+  const pm = playerModelP(PLAYER_MODEL, A.lineupIds, B.lineupIds, A.id, B.id);
+  const penA = pm ? 0 : (A.lineup?.eloPenalty || 0);              // player model already sees stand-ins
+  const penB = pm ? 0 : (B.lineup?.eloPenalty || 0);
+
+  // H2H with the same core on both sides; skipped entirely (no API calls) while its weight is 0
+  let cand = [], h2hRows = [];
+  if (H2H_WEIGHT > 0) {
+    cand = A.matches.filter(m => Number(m.opposing_team_id) === Number(idB)).slice(0, H2H_MAX_FETCH);
+    const checked = await Promise.all(cand.map(async m => {
+      try {
+        const d = await odGet(`/matches/${m.match_id}`);
+        const sideA = (d.players || []).filter(pl => pl.isRadiant === m.radiant).map(pl => pl.account_id).filter(Boolean);
+        const sideB = (d.players || []).filter(pl => pl.isRadiant !== m.radiant).map(pl => pl.account_id).filter(Boolean);
+        if (!sameCore(A.lineupIds, sideA) || !sameCore(B.lineupIds, sideB)) return null;
+        return { start_time: m.start_time, aWon: m.radiant_win === m.radiant };
+      } catch (e) { return null; }
+    }));
+    h2hRows = checked.filter(Boolean);
+  }
+  const h2hAdj = H2H_WEIGHT > 0 ? computeH2HAdjust(h2hRows) : null;
+
+  const formA = computeRecentForm(A.matches);
+  const formB = computeRecentForm(B.matches);
+  const formAdj = computeFormAdjust(formA, formB);
+  const combined = combineAdjustments(h2hAdj, formAdj);
+
+  const trace = [];
+  let p1;
+  if (pm) {
+    p1 = pm.p;
+    trace.push({ step: 'players', after: p1 });
+  } else {
+    p1 = eloP1 != null ? eloP1 : 0.5;
+    trace.push({ step: 'elo', after: p1 });
+    if (eloP1 != null) {
+      if (penA) { p1 = computeEloBaseline(rA - penA, rB); trace.push({ step: 'lineup_a', after: p1, elo: -penA }); }
+      if (penB) { p1 = computeEloBaseline(rA - penA, rB - penB); trace.push({ step: 'lineup_b', after: p1, elo: -penB }); }
+    }
+  }
+  if (combined.value !== 0) {
+    p1 = Math.min(0.99, Math.max(0.01, p1 + combined.value / 100));
+    trace.push({ step: 'h2h_form', after: p1, pp: combined.value });
+  }
+  p1 = Math.min(0.99, Math.max(0.01, p1));
+  trace.push({ step: 'final', after: p1 });
+
+  const ps = seriesProb(p1, wa, wb, bo);
+  if (bo > 1 || wa || wb) trace.push({ step: 'series', after: ps });
+
+  return {
+    teamA: A.info, teamB: B.info, teamAId: Number(idA), teamBId: Number(idB),
+    offline: !!(A.offline || B.offline), lineupTs: Math.min(A.lineupTs || Infinity, B.lineupTs || Infinity),
+    p1, ps, bo, wa, wb, eloP1, pm, h2hAdj, h2hChecked: cand.length, formAdj, formA, formB, combined,
+    lineupA: A.lineup, lineupB: B.lineup, trace,
+    matchesA: A.matchCount ?? A.matches.length, matchesB: B.matchCount ?? B.matches.length,
+    timestamp: Date.now()
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ODDS TAB
+// ═══════════════════════════════════════════════════════════════════
+const ODDS_KEY = 'dota_analyzer_oddsinput_v1';
+const MODEL_KEY = 'dota_player_model_v1';
+let PLAYER_MODEL = null;   // loaded from player_ratings.json (export of backtest.py)
+
+function renderModelStatus() {
+  const el = document.getElementById('model-status');
+  if (!el) return;
+  if (!PLAYER_MODEL) { el.textContent = t('model-none'); return; }
+  const days = Math.floor((Date.now() - Date.parse(PLAYER_MODEL.asof)) / 86400000);
+  el.textContent = tf('model-loaded', { np: Object.keys(PLAYER_MODEL.players).length, nt: Object.keys(PLAYER_MODEL.teams).length, asof: PLAYER_MODEL.asof })
+    + (days > 14 ? tf('model-stale', { d: days }) : '')
+    + (PLAYER_MODEL.names ? '' : t('model-nonames'))
+    + (PLAYER_MODEL.lineups ? '' : t('model-nolineups'));
+}
+
+async function loadModelFile(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  try {
+    const obj = JSON.parse(await f.text());
+    if (!obj || typeof obj.players !== 'object' || typeof obj.teams !== 'object' || !obj.scale) throw new Error('bad');
+    PLAYER_MODEL = obj;
+    try { localStorage.setItem(MODEL_KEY, JSON.stringify(obj)); } catch {}
+    renderModelStatus();
+  } catch (e) {
+    document.getElementById('model-status').textContent = t('model-bad');
+  }
+  input.value = '';
+}
+
+function clearModel() {
+  PLAYER_MODEL = null;
+  try { localStorage.removeItem(MODEL_KEY); } catch {}
+  renderModelStatus();
+}
+let rows = [];
+
+function setStatusEl(id, msg, cls) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = 'status-line' + (cls ? ' ' + cls : '');
+}
+
+function clearOdds() {
+  document.getElementById('odds-input').value = '';
+  try { localStorage.removeItem(ODDS_KEY); } catch {}
+  rows = [];
+  setStatusEl('status-odds', '');
+  renderTable();
+}
+
+function clearTeamCache() {
+  try { Object.keys(localStorage).filter(k => k.startsWith('dota_bundle_v1_')).forEach(k => localStorage.removeItem(k)); } catch {}
+  _bundleCache.clear(); _respCache.clear(); _teamsFailed = false; _odDown = false; _netFails = 0;
+  setStatusEl('status-odds', t('cache-cleared'), 'ok');
+}
+
+async function runOddsAnalysis() {
+  const text = document.getElementById('odds-input').value;
+  try { localStorage.setItem(ODDS_KEY, text); } catch {}
+  const parsed = parseMulti(text);
+  if (!parsed.length) { setStatusEl('status-odds', t('err-nothing'), 'err'); return; }
+
+  _odDown = false; _netFails = 0;
+  rows = parsed.map(m => ({ ...m, status: 'wait', res: null, flags: [], saved: false, showFix: false, idA: null, idB: null, overrideA: null, overrideB: null }));
+  renderTable();
+  const btn = document.getElementById('btn-odds');
+  btn.disabled = true;
+  try {
+    setStatusEl('status-odds', tf('status-parsed', { n: rows.length, k: rows.filter(r => r.oddsA).length }) + ' ' + t('status-teamlist'), '');
+    const pool = await teamPool();
+    if (!pool) setStatusEl('status-odds', t('status-teamlist-fail'), '');
+    else if (_teamsFailed) setStatusEl('status-odds', t('status-teamlist-cache'), '');
+    for (let i = 0; i < rows.length; i++) {
+      setStatusEl('status-odds', tf('status-progress', { i: i + 1, n: rows.length, m: `${rows[i].a} vs ${rows[i].b}` }), '');
+      await analyzeRow(rows[i]);
+    }
+    const thr = getMinEv();
+    const v = rows.filter(r => r.reliable !== false && rowEdge(r)?.bestEv >= thr).length;
+    setStatusEl('status-odds', tf('status-finished', { ev: (thr * 100).toFixed(1).replace(/\.0$/, ''), v }), 'ok');
+  } catch (err) {
+    console.error(err);
+    setStatusEl('status-odds', t('status-err') + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function analyzeRow(row) {
+  row.status = 'loading'; row.flags = []; row.res = null;
+  renderTable();
+  try {
+    const teams = await teamPool();
+    const resolve = async (name, override) => {
+      if (override) return { team: await getTeamInfo(override), how: 'exact' };
+      if (!teams) return { team: null, how: 'none' };
+      let best = { team: null, how: 'none' };
+      for (const n of name) {                       // every spelling seen at the bookmakers
+        const r = resolveTeam(n, teams);
+        if (r.how === 'exact') return r;
+        if (r.team && !best.team) best = r;
+      }
+      return best;
+    };
+    const ra = await resolve(row.namesA && row.namesA.length ? row.namesA : [row.a], row.overrideA);
+    const rb = await resolve(row.namesB && row.namesB.length ? row.namesB : [row.b], row.overrideB);
+    row.idA = ra.team ? ra.team.team_id : null;
+    row.idB = rb.team ? rb.team.team_id : null;
+    row.nameA = ra.team?.name; row.nameB = rb.team?.name;
+    if (!ra.team || !rb.team) { row.status = 'noteam'; renderTable(); return; }
+
+    const [wa, wb] = row.score || [0, 0];
+    const res = await analyzePair(row.idA, row.idB, { bo: row.bo, wa, wb });
+    if (Number(row.idA) === Number(row.idB)) { row.status = 'error'; row.errMsg = t('err-same-team'); renderTable(); return; }
+    if (!res.pm && res.eloP1 == null) { row.status = 'nodata'; renderTable(); return; }
+    row.res = res;
+
+    const flags = [];
+    if (ra.how === 'fuzzy') flags.push({ k: 'flag-fuzzy', v: { team: `${row.a} → ${ra.team.name}` } });
+    if (rb.how === 'fuzzy') flags.push({ k: 'flag-fuzzy', v: { team: `${row.b} → ${rb.team.name}` } });
+    const nowS = Date.now() / 1000;
+    [[ra.team, row.a], [rb.team, row.b]].forEach(([tm, nm]) => {
+      if (!tm.last_match_time || (nowS - tm.last_match_time) / 86400 > STALE_DAYS) flags.push({ k: 'flag-stale', v: { team: nm, d: STALE_DAYS }, bad: true });
+    });
+    // 2+ players in the last match who are not on the listed roster: the model priced stand-ins,
+    // which is wrong if the regular five play -> no pick (1 player is often just stale roster data)
+    [[res.lineupA, row.a], [res.lineupB, row.b]].forEach(([lu, nm]) => {
+      if (lu && lu.rosterMismatchCount) flags.push({ k: 'flag-lineup', v: { team: nm, n: lu.rosterMismatchCount }, bad: lu.rosterMismatchCount >= 2 });
+    });
+    if (res.matchesA < MIN_TEAM_GAMES) flags.push({ k: 'flag-thin', v: { team: row.a, n: res.matchesA }, bad: true });
+    if (res.matchesB < MIN_TEAM_GAMES) flags.push({ k: 'flag-thin', v: { team: row.b, n: res.matchesB }, bad: true });
+    if (res.pm && res.pm.gA != null && res.pm.gA < MIN_PLAYER_GAMES) flags.push({ k: 'flag-newpl', v: { team: row.a, n: res.pm.gA }, bad: true });
+    if (res.pm && res.pm.gB != null && res.pm.gB < MIN_PLAYER_GAMES) flags.push({ k: 'flag-newpl', v: { team: row.b, n: res.pm.gB }, bad: true });
+    if (row.live) flags.push({ k: 'flag-live', v: {} });
+    flags.push(res.pm ? { k: 'flag-pm', v: {}, good: true } : { k: 'flag-odr', v: {} });
+    if (res.offline) {
+      const d = isFinite(res.lineupTs) ? Math.floor((Date.now() / 1000 - res.lineupTs) / 86400) : null;
+      flags.push({ k: 'flag-offline', v: { d: d ?? '?' }, bad: d != null && d > 7 });
+    }
+    row.flags = flags;
+    // sanity check vs the market: a gap this big almost always means the model is missing something
+    const e0 = (row.oddsA && row.oddsB) ? computeEdge(res.ps, row.oddsA, row.oddsB) : null;
+    if (e0 && Math.abs(res.ps - e0.nvA) > MAX_MARKET_GAP) {
+      flags.push({ k: 'flag-gap', v: { d: Math.round(Math.abs(res.ps - e0.nvA) * 100) }, bad: true });
+    }
+    row.reliable = !flags.some(f => f.bad);
+    row.status = 'done';
+  } catch (err) {
+    console.error(err);
+    row.status = 'error'; row.errMsg = err.message;
+  }
+  renderTable();
+}
+
+function getMinEv() {
+  const v = parseFloat(document.getElementById('min-ev').value);
+  return (isNaN(v) ? 5 : v) / 100;
+}
+
+function rowEdge(r) {
+  if (!r.res || !r.oddsA || !r.oddsB) return null;
+  return computeEdge(r.res.ps, r.oddsA, r.oddsB);
+}
+
+const pct = x => (x * 100).toFixed(1) + '%';
+const evFmt = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
+
+function bookList(r, e) {
+  // single-bookmaker paste: books is empty -> just the margin as before
+  if (!r.books || !r.books.length) return e ? `<div class="small">${t('lbl-margin')} ${(e.margin * 100).toFixed(1)}%</div>` : '';
+  const multi = r.books.length > 1;
+  const hi = (v, best) => multi && v === best ? `<span class="ev-pos">${v.toFixed(2)}</span>` : v.toFixed(2);
+  return `<div class="small" style="margin-top:4px;line-height:1.6">` + r.books.map(b =>
+    `<b>${esc(b.name)}</b> ${hi(b.a, r.oddsA)} / ${hi(b.b, r.oddsB)} · ${(100 * (1 / b.a + 1 / b.b - 1)).toFixed(1)}%`).join('<br>')
+    + (multi ? `<br>${t('lbl-best')} ${(100 * (1 / r.oddsA + 1 / r.oddsB - 1)).toFixed(1)}%` : `<br>${t('lbl-only')}`)
+    + `</div>`;
+}
+
+let _mkt = 'win';
+function setMkt(m) {
+  _mkt = m;
+  ['win', 'maps', 'kd'].forEach(x => document.getElementById('mkt-btn-' + x)?.classList.toggle('active', x === m));
+  renderTable();
+}
+function setMo(idx, key, val) {
+  const v = parseFloat(String(val).replace(',', '.'));
+  rows[idx].mo = rows[idx].mo || {};
+  if (v > 0) rows[idx].mo[key] = v; else delete rows[idx].mo[key];
+  renderTable();
+}
+const moIn = (idx, key, r, line) => `<input class="mo-in${line ? ' line' : ''}" value="${r.mo?.[key] ?? ''}" placeholder="${line ? t('ph-line') : t('ph-odds')}" onchange="setMo(${idx}, '${key}', this.value)">`;
+const evSpan = (p, odds, thr) => {
+  if (!odds || odds <= 1) return '';
+  const ev = p * odds - 1;
+  return `<span class="${ev >= thr ? 'ev-pos' : ev > 0 ? 'ev-mid' : 'ev-neg'}">EV ${(ev >= 0 ? '+' : '') + (ev * 100).toFixed(1)}%</span>`;
+};
+const mktLine = (label, p, idx, key, r, thr) => `<div class="mkt-line"><span class="lbl">${label}</span>
+  <span class="pp">${(p * 100).toFixed(1)}%</span><span class="fair">${p > 0.001 ? (1 / p).toFixed(2) : '-'}</span>
+  ${moIn(idx, key, r)} ${evSpan(p, r.mo?.[key], thr)}</div>`;
+
+function matchCellHtml(r) {
+  const when = [r.live ? `<span class="badge-live">${tf('live-tag', { s: r.score ? r.score.join(':') : '' }).trim()}</span>` : esc(r.when), `Bo${r.bo}`].filter(Boolean).join(' · ');
+  return `<div class="small">${esc(r.league)}</div><div class="t-name">${esc(r.a)}</div><div class="t-name">${esc(r.b)}</div><div class="small">${when}</div>`
+    + (r.reliable === false ? `<div class="small" style="color:var(--yellow)">${t('mkt-lowdata')}</div>` : '');
+}
+
+function renderMapsTable() {
+  const thr = getMinEv();
+  document.getElementById('summary-line').innerHTML = t('mkt-maps-hint');
+  const head = `<thead><tr><th>${t('th-match')}</th><th>${t('th-score')}</th><th>${t('th-hcp')}</th><th>${t('th-tot')}</th></tr></thead>`;
+  const body = rows.map((r, idx) => {
+    if (!r.res) return `<tr><td>${matchCellHtml(r)}</td><td colspan="3" class="small">${t('mkt-need-run')}</td></tr>`;
+    if (r.bo < 3) return `<tr><td>${matchCellHtml(r)}</td><td colspan="3" class="small">${t('mkt-bo1')}</td></tr>`;
+    const [wa, wb] = r.score || [0, 0];
+    const mk = mapMarkets(r.res.p1, wa, wb, r.bo);
+    const scores = mk.scores.map(x => mktLine(`${x.a}:${x.b}`, x.p, idx, 'cs' + x.k, r, thr)).join('');
+    const nm = side => esc(side === 'a' ? r.a : r.b);
+    const hcp = mk.hcp.map(x => mktLine(`${nm(x.side)} ${x.h > 0 ? '+' : ''}${x.h}`, x.p, idx, x.key, r, thr)).join('');
+    const tot = mk.tot.map(x => mktLine(`${x.over ? t('lbl-over') : t('lbl-under')} ${x.l}`, x.p, idx, x.key, r, thr)).join('');
+    return `<tr><td>${matchCellHtml(r)}<div class="small">${t('lbl-permap')} ${pct(r.res.p1)}</div></td><td>${scores}</td><td>${hcp}</td><td>${tot}</td></tr>`;
+  }).join('');
+  document.getElementById('odds-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function renderKdTable() {
+  const thr = getMinEv();
+  const kd = PLAYER_MODEL?.kd;
+  if (!kd) {
+    document.getElementById('summary-line').innerHTML = t('kd-none');
+    document.getElementById('odds-table').innerHTML = '';
+    return;
+  }
+  document.getElementById('summary-line').innerHTML = tf('kd-hint', { lt: kd.league_tot.toFixed(1), ld: kd.league_dur.toFixed(1), st: kd.sd_tot.toFixed(1), sd: kd.sd_dur.toFixed(1) });
+  const head = `<thead><tr><th>${t('th-match')}</th><th>${t('th-kills')}</th><th>${t('th-dur')}</th></tr></thead>`;
+  const block = (idx, r, mean, sd, pre, unit, q) => {
+    const line = r.mo?.[pre + 'L'];
+    let out = `<div class="mkt-line"><span class="lbl">${t('lbl-expected')}</span><span class="pp" style="min-width:110px">${mean.toFixed(1)}${unit} ± ${sd.toFixed(1)}</span></div>
+      <div class="mkt-line"><span class="lbl">${t('lbl-line')}</span>${moIn(idx, pre + 'L', r, true)}</div>`;
+    if (line) {
+      const po = pOverKd(q, mean, sd, line);
+      out += mktLine(`${t('lbl-over')} ${line}`, po, idx, pre + 'O', r, thr) + mktLine(`${t('lbl-under')} ${line}`, 1 - po, idx, pre + 'U', r, thr);
+    }
+    return out;
+  };
+  const body = rows.map((r, idx) => {
+    if (!r.idA || !r.idB) return `<tr><td>${matchCellHtml(r)}</td><td colspan="2" class="small">${t('mkt-need-run')}</td></tr>`;
+    const k = kdPredict(kd, r.idA, r.idB);
+    const thin = Math.min(k.wA, k.wB) < 5;
+    const warn = thin ? `<div class="small" style="color:var(--yellow)">${tf('kd-thin', { a: k.wA.toFixed(0), b: k.wB.toFixed(0) })}</div>` : '';
+    return `<tr><td>${matchCellHtml(r)}${warn}</td><td>${block(idx, r, k.tot, k.sdTot, 'k', '', kd.q_tot)}</td><td>${block(idx, r, k.dur, k.sdDur, 'd', ' min', kd.q_dur)}</td></tr>`;
+  }).join('');
+  document.getElementById('odds-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function renderTable() {
+  if (_mkt !== 'win' && rows.length) {
+    document.getElementById('odds-results').style.display = 'block';
+    return _mkt === 'maps' ? renderMapsTable() : renderKdTable();
+  }
+  const wrap = document.getElementById('odds-results');
+  if (!rows.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  const thr = getMinEv();
+
+  let view = rows.map((r, idx) => ({ r, idx, e: rowEdge(r) }));
+  if (document.getElementById('sort-mode').value === 'edge') {
+    view.sort((x, y) => (y.e ? y.e.bestEv : -Infinity) - (x.e ? x.e.bestEv : -Infinity) || x.idx - y.idx);
+  }
+
+  const nOdds = rows.filter(r => r.oddsA).length;
+  const nVal = view.filter(x => x.e && x.e.bestEv >= thr && x.r.reliable !== false).length;
+  const bs = bookStats(rows);
+  document.getElementById('summary-line').innerHTML = tf('summary', { n: rows.length, k: nOdds, v: nVal, ev: (thr * 100).toFixed(1).replace(/\.0$/, '') })
+    + (bs.length ? '<br>' + t('books-cmp') + ' ' + bs.sort((x, y) => x.margin - y.margin)
+        .map(b => tf('books-item', { name: esc(b.name), m: (b.margin * 100).toFixed(1), best: b.best, n: b.n })).join(' · ') : '');
+
+  const evCls = ev => ev >= thr ? 'ev-pos' : ev > 0 ? 'ev-mid' : 'ev-neg';
+
+  const head = `<thead><tr>
+    <th>${t('th-match')}</th><th>${t('th-model')}</th><th>${t('th-fair')}</th>
+    <th>${t('th-book')}</th><th>${t('th-ev')}</th><th>${t('th-pick')}</th><th>${t('th-data')}</th><th></th>
+  </tr></thead>`;
+
+  const body = view.map(({ r, idx, e }) => {
+    const isValue = e && e.bestEv >= thr && r.reliable !== false;
+    const unreliableEdge = e && e.bestEv >= thr && r.reliable === false;
+    const when = [r.live ? `<span class="badge-live">${tf('live-tag', { s: r.score ? r.score.join(':') : '' }).trim()}</span>` : esc(r.when), `Bo${r.bo}`].filter(Boolean).join(' · ');
+    const matchCell = `
+      <div class="small">${esc(r.league)}</div>
+      <div class="t-name">${esc(r.a)}</div>
+      <div class="t-name">${esc(r.b)}</div>
+      <div class="small">${when}</div>`;
+
+    let modelCell = '', fairCell = '', bookCell = '', evCell = '', pickCell = '', dataCell = '';
+    if (r.status === 'done' && r.res) {
+      const ps = r.res.ps;
+      modelCell = `<div><span class="t-name">${pct(ps)}</span>${e ? ` <span class="small">${t('lbl-nv')} ${pct(e.nvA)}</span>` : ''}</div>
+                   <div><span class="t-name">${pct(1 - ps)}</span>${e ? ` <span class="small">${t('lbl-nv')} ${pct(e.nvB)}</span>` : ''}</div>`;
+      fairCell = `<div>${(1 / ps).toFixed(2)}</div><div>${(1 / (1 - ps)).toFixed(2)}</div>`;
+      if (e) {
+        bookCell = `<div>${r.oddsA.toFixed(2)}</div><div>${r.oddsB.toFixed(2)}</div>` + bookList(r, e);
+        evCell = `<div class="${evCls(e.evA)}">${evFmt(e.evA)}</div><div class="${evCls(e.evB)}">${evFmt(e.evB)}</div>`;
+        if (isValue) {
+          const nm = e.side === 'a' ? r.a : r.b;
+          const od = e.side === 'a' ? r.oddsA : r.oddsB;
+          const bk = r.books && r.books.length ? ' · ' + esc(e.side === 'a' ? r.bestA : r.bestB) : '';
+          pickCell = `<div class="pick">▶ ${esc(nm)}</div><div class="small">@ ${od.toFixed(2)}${bk} · EV ${evFmt(e.bestEv)}</div>`;
+        } else pickCell = unreliableEdge ? `<span class="pick-none" style="color:var(--yellow)">${t('pick-unreliable')}</span>` : `<span class="pick-none">${t('pick-none')}</span>`;
+      } else {
+        bookCell = `<span class="small">${t('no-odds')}</span>`;
+        evCell = pickCell = '<span class="small">-</span>';
+      }
+      dataCell = r.flags.length
+        ? r.flags.map(f => `<span class="flag ${f.bad ? 'bad' : f.good ? 'good' : ''}">${esc(tf(f.k, f.v))}</span>`).join('')
+        : `<span class="flag good">${t('flag-ok')}</span>`;
+    } else {
+      const msg = r.status === 'loading' ? t('row-loading')
+        : r.status === 'noteam' ? t('row-noteam')
+        : r.status === 'nodata' ? t('row-nodata')
+        : r.status === 'error' ? tf('row-error', { msg: esc(r.errMsg || '') })
+        : t('row-wait');
+      modelCell = `<span class="small">${msg}</span>`;
+      if (r.oddsA) bookCell = `<div>${r.oddsA.toFixed(2)}</div><div>${r.oddsB.toFixed(2)}</div>` + bookList(r, null);
+    }
+
+    const acts = `
+      ${r.res ? `<button class="act-btn" onclick="openDetail(${idx})">${t('btn-detail')}</button>` : ''}
+      ${r.res ? `<button class="act-btn" onclick="saveRow(${idx})">${r.saved ? t('btn-saved') : t('btn-save')}</button>` : ''}
+      <button class="act-btn" onclick="toggleFix(${idx})">${t('btn-fix')}</button>`;
+
+    const fixRow = r.showFix ? `<tr class="fix-row"><td colspan="8">
+        <div class="small" style="margin-bottom:8px">${t('fix-hint')}</div>
+        <div class="fix-inputs">
+          <span>${esc(r.a)}${r.nameA ? ` → <b>${esc(r.nameA)}</b>` : ''}</span>
+          <input type="number" id="fix-a-${idx}" value="${r.idA ?? ''}" placeholder="Team ID">
+          <span>${esc(r.b)}${r.nameB ? ` → <b>${esc(r.nameB)}</b>` : ''}</span>
+          <input type="number" id="fix-b-${idx}" value="${r.idB ?? ''}" placeholder="Team ID">
+          <select id="fix-bo-${idx}">${[1, 3, 5].map(n => `<option value="${n}" ${n === r.bo ? 'selected' : ''}>Bo${n}</option>`).join('')}</select>
+          <button class="act-btn" onclick="recalcRow(${idx})">${t('btn-recalc')}</button>
+        </div></td></tr>` : '';
+
+    return `<tr class="${isValue ? 'value-row' : ''}">
+      <td>${matchCell}</td><td>${modelCell}</td><td>${fairCell}</td><td>${bookCell}</td>
+      <td>${evCell}</td><td>${pickCell}</td><td>${dataCell}</td><td>${acts}</td></tr>${fixRow}`;
+  }).join('');
+
+  document.getElementById('odds-table').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+function toggleFix(idx) { rows[idx].showFix = !rows[idx].showFix; renderTable(); }
+
+async function recalcRow(idx) {
+  const r = rows[idx];
+  const a = document.getElementById(`fix-a-${idx}`).value.trim();
+  const b = document.getElementById(`fix-b-${idx}`).value.trim();
+  if (a) r.overrideA = Number(a);
+  if (b) r.overrideB = Number(b);
+  const bo = Number(document.getElementById(`fix-bo-${idx}`)?.value);
+  if (bo) r.bo = bo;
+  await analyzeRow(r);
+}
+
+function saveRow(idx) {
+  const r = rows[idx];
+  if (!r.res || r.saved) return;
+  const e = rowEdge(r);
+  saveToHistory({
+    timestamp: Date.now() + idx,
+    teamAId: r.idA, teamBId: r.idB, teamAName: r.a, teamBName: r.b,
+    p1: r.res.ps, odds: e ? { a: r.oddsA, b: r.oddsB } : null,
+    side: e ? e.side : null, ev: e ? e.bestEv : null, isPick: !!(e && e.bestEv >= getMinEv() && r.reliable !== false),
+    live: !!r.live, model: r.res.pm ? 'players' : 'opendota',
+    books: r.books && r.books.length ? r.books : null, book: e && r.books && r.books.length ? (e.side === 'a' ? r.bestA : r.bestB) : null
+  });
+  r.saved = true;
+  renderTable();
+}
+
+function openDetail(idx) {
+  const r = rows[idx];
+  document.getElementById('team-a-id').value = r.idA ?? '';
+  document.getElementById('team-b-id').value = r.idB ?? '';
+  document.getElementById('team-a-search').value = r.a;
+  document.getElementById('team-b-search').value = r.b;
+  document.getElementById('manual-bo').value = String(r.bo);
+  showTab('detail');
+  window._lastResult = r.res;
+  renderResults(r.res);
+  setStatusEl('status-line', t('status-done'), 'ok');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DETAIL TAB (single match, manual team IDs)
+// ═══════════════════════════════════════════════════════════════════
+const searchTimers = {};
+
+function daysAgoLabel(unixSeconds) {
+  if (!unixSeconds) return t('search-never');
+  const days = Math.floor((Date.now() / 1000 - unixSeconds) / 86400);
+  if (days <= 0) return t('search-today');
+  return tf('search-days-ago', { n: days });
+}
+
+function onTeamSearch(side) {
+  clearTimeout(searchTimers[side]);
+  const input = document.getElementById(`team-${side}-search`);
+  const resultsEl = document.getElementById(`search-results-${side}`);
+  const query = input.value.trim().toLowerCase();
+  if (query.length < 2) { resultsEl.classList.remove('show'); return; }
+
+  searchTimers[side] = setTimeout(async () => {
+    try {
+      const teams = await getTeams();
+      const matches = teams
+        .filter(tm => (tm.name && tm.name.toLowerCase().includes(query)) || (tm.tag && tm.tag.toLowerCase().includes(query)))
+        .sort((a, b) => (b.last_match_time || 0) - (a.last_match_time || 0))
+        .slice(0, 8);
+      if (!matches.length) {
+        resultsEl.innerHTML = `<div class="search-result-item">${t('search-none')}</div>`;
+      } else {
+        resultsEl.innerHTML = matches.map(tm => `
+          <div class="search-result-item" data-side="${side}" data-id="${tm.team_id}" data-name="${esc(tm.name || '')}">
+            <div class="search-result-name">${esc(tm.name || '(no name)')} ${tm.tag ? '[' + esc(tm.tag) + ']' : ''}</div>
+            <div class="search-result-meta">ID ${tm.team_id} · ${t('rating-label')} ${tm.rating != null ? tm.rating.toFixed(0) : '-'} · ${tm.wins ?? 0}W-${tm.losses ?? 0}L · ${daysAgoLabel(tm.last_match_time)}</div>
+          </div>`).join('');
+      }
+      resultsEl.classList.add('show');
+    } catch (err) {
+      console.error(err);
+      resultsEl.innerHTML = `<div class="search-result-item">⚠ ${esc(err.message)}</div>`;
+      resultsEl.classList.add('show');
+    }
+  }, 300);
+}
+
+document.addEventListener('click', (e) => {
+  const item = e.target.closest('.search-result-item[data-id]');
+  if (item) {
+    const side = item.dataset.side;
+    document.getElementById(`team-${side}-id`).value = item.dataset.id;
+    document.getElementById(`team-${side}-search`).value = item.dataset.name;
+    document.getElementById(`search-results-${side}`).classList.remove('show');
+    return;
+  }
+  ['a', 'b'].forEach(side => {
+    const wrap = document.getElementById(`team-${side}-search`)?.closest('.search-wrap');
+    if (wrap && !wrap.contains(e.target)) document.getElementById(`search-results-${side}`)?.classList.remove('show');
+  });
+});
+
+async function runManual() {
+  const idA = document.getElementById('team-a-id').value.trim();
+  const idB = document.getElementById('team-b-id').value.trim();
+  if (!idA || !idB) { setStatusEl('status-line', t('err-need-ids'), 'err'); return; }
+  const bo = Number(document.getElementById('manual-bo').value);
+  const btn = document.getElementById('btn-analyze');
+  btn.disabled = true;
+  document.getElementById('results').style.display = 'none';
+  try {
+    setStatusEl('status-line', t('status-loading'), '');
+    const res = await analyzePair(idA, idB, { bo });
+    setStatusEl('status-line', t('status-done'), 'ok');
+    window._lastResult = res;
+    renderResults(res);
+    saveToHistory({ timestamp: res.timestamp, teamAId: res.teamAId, teamBId: res.teamBId, teamAName: res.teamA.name, teamBName: res.teamB.name, p1: res.ps, odds: null });
+  } catch (err) {
+    console.error(err);
+    setStatusEl('status-line', t('status-err') + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderResults({ teamA, teamB, p1, ps, bo, wa, wb, eloP1, pm, h2hAdj, h2hChecked, formAdj, formA, formB, combined, lineupA, lineupB, trace }) {
+  document.getElementById('results').style.display = 'block';
+  const p2 = 1 - ps;
+  const ratingLbl = t('rating-label');
+  const nA = esc(teamA.name || 'Team A'), nB = esc(teamB.name || 'Team B');
+
+  document.getElementById('matchup-bar').innerHTML = `
+    <div>
+      <div class="team-name-big">${nA}</div>
+      <div class="team-rating">${ratingLbl}: ${teamA.rating != null ? teamA.rating.toFixed(0) : '-'} · ${teamA.wins ?? 0}W-${teamA.losses ?? 0}L</div>
+    </div>
+    <div class="matchup-center"><div class="vs-txt">VS</div><div class="team-rating">Bo${bo}</div></div>
+    <div style="text-align:right">
+      <div class="team-name-big">${nB}</div>
+      <div class="team-rating">${ratingLbl}: ${teamB.rating != null ? teamB.rating.toFixed(0) : '-'} · ${teamB.wins ?? 0}W-${teamB.losses ?? 0}L</div>
+    </div>`;
+
+  document.getElementById('prob-grid').innerHTML = `
+    <div class="prob-card">
+      <div class="team-label">${nA}</div>
+      <div class="pct ${ps >= p2 ? 'fav' : 'dog'}">${pct(ps)}</div>
+      <div class="fair-odds">${t('fair-odds-label')}: <b>${(1 / ps).toFixed(2)}</b></div>
+    </div>
+    <div class="prob-card">
+      <div class="team-label">${nB}</div>
+      <div class="pct ${p2 > ps ? 'fav' : 'dog'}">${pct(p2)}</div>
+      <div class="fair-odds">${t('fair-odds-label')}: <b>${(1 / p2).toFixed(2)}</b></div>
+    </div>`;
+
+  const traceLabels = {
+    elo: t('trace-elo'),
+    players: t('trace-players'),
+    h2h_form: t('trace-h2h-form'),
+    lineup_a: tf('trace-lineup', { team: teamA.name }),
+    lineup_b: tf('trace-lineup', { team: teamB.name }),
+    final: t('trace-final'),
+    series: tf('trace-series', { bo, st: (wa || wb) ? ` (${wa}:${wb})` : '' }),
+  };
+  const traceRows = trace.map((step, i) => {
+    const extra = step.pp != null ? ` (${step.pp >= 0 ? '+' : ''}${step.pp}pp)` : step.elo != null ? ` (${step.elo} Elo)` : '';
+    return `<div class="trace-row">
+      <span class="trace-num">${i + 1}.</span>
+      <span>${esc(traceLabels[step.step] || step.step)}${extra}</span>
+      <span class="trace-arrow">→</span>
+      <span class="trace-val">${nA}: ${pct(step.after)}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('trace-box').innerHTML = `<div class="trace-title">${t('trace-title')}</div>${traceRows}`;
+
+  const notes = [];
+  if (pm) {
+    notes.push(`<div class="note-box lineup"><span class="tag">${t('tag-players')}</span>
+      ${tf('players-note', { a: nA, b: nB, na: pm.nA, nb: pm.nB, p: pct(p1), asof: PLAYER_MODEL?.asof ?? '?' })}</div>`);
+  }
+  notes.push(`<div class="note-box elo"><span class="tag">${t('tag-elo')}</span>
+    ${tf('elo-note', {
+      a: nA, b: nB,
+      ra: teamA.rating?.toFixed(0) ?? '-', rb: teamB.rating?.toFixed(0) ?? '-',
+      p: eloP1 != null ? pct(eloP1) : t('elo-note-na')
+    })}</div>`);
+
+  if (h2hAdj) {
+    const fav = h2hAdj.adjust >= 0 ? nA : nB;
+    notes.push(`<div class="note-box h2h"><span class="tag">${t('tag-h2h')}</span>
+      ${tf('h2h-note', { n: h2hAdj.matchesFound, m: h2hChecked ?? '?', a: nA, wr: (h2hAdj.winRateA * 100).toFixed(0), sign: h2hAdj.adjust > 0 ? '+' : '', adj: h2hAdj.adjust, fav })}</div>`);
+  } else {
+    notes.push(`<div class="note-box h2h"><span class="tag">${t('tag-h2h')}</span> ${H2H_WEIGHT === 0 ? t('h2h-off') : tf('h2h-none', { m: h2hChecked ?? 0 })}</div>`);
+  }
+
+  if (formAdj) {
+    const fmtSide = f => f ? `${f.wins}/${f.total}` : t('form-nodata');
+    const fav = formAdj.adjust > 0 ? nA : nB;
+    notes.push(`<div class="note-box form"><span class="tag">${t('tag-form')}</span>
+      ${tf('form-note', { a: nA, b: nB, fa: fmtSide(formA), fb: fmtSide(formB), sign: formAdj.adjust > 0 ? '+' : '', adj: formAdj.adjust, fav })}${FORM_WEIGHT === 0 ? ' (' + t('weight-off') + ')' : ''}</div>`);
+  }
+
+  if (combined.wasAttenuated) {
+    notes.push(`<div class="note-box lineup"><span class="tag">${t('tag-combo')}</span>
+      ${tf('combo-note', { pct: Math.round(FORM_ATTENUATION * 100), sign: combined.value >= 0 ? '+' : '', val: combined.value })}</div>`);
+  }
+
+  [[lineupA, teamA], [lineupB, teamB]].forEach(([signal, team]) => {
+    if (!signal) return;
+    const parts = [];
+    if (signal.rosterMismatchCount) parts.push(tf('lineup-mismatch', { n: signal.rosterMismatchCount }));
+    if (signal.thinHistoryPlayers.length) parts.push(tf('lineup-thin', { n: signal.thinHistoryPlayers.length }));
+    notes.push(`<div class="note-box lineup warn"><span class="tag">${esc(tf('tag-lineup', { team: team.name }))}</span>
+      ${parts.join('; ')}. ${pm ? t('lineup-in-pm') : tf('lineup-penalty', { elo: signal.eloPenalty })}</div>`);
+  });
+
+  document.getElementById('notes-container').innerHTML = notes.join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Tabs
+// ═══════════════════════════════════════════════════════════════════
+function showTab(tab) {
+  ['odds', 'detail', 'history'].forEach(n => {
+    document.getElementById('tab-' + n).style.display = n === tab ? 'block' : 'none';
+    document.getElementById('tab-btn-' + n).classList.toggle('active', n === tab);
+  });
+  if (tab === 'history') renderHistoryTab();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// History, closing line and CLV (localStorage)
+// ═══════════════════════════════════════════════════════════════════
+const HIST_KEY = 'dota_analyzer_history_v1';
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); } catch { return []; }
+}
+function saveHistoryArr(arr) {
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(arr)); } catch {}
+}
+
+function saveToHistory(rec) {
+  const hist = loadHistory();
+  hist.unshift({
+    id: rec.timestamp, timestamp: rec.timestamp,
+    teamAId: rec.teamAId, teamBId: rec.teamBId,
+    teamAName: rec.teamAName, teamBName: rec.teamBName,
+    p1: rec.p1, p2: 1 - rec.p1, odds: rec.odds || null,
+    side: rec.side ?? null, ev: rec.ev ?? null, isPick: !!rec.isPick, live: !!rec.live, model: rec.model || null,
+    books: rec.books || null, book: rec.book || null,
+    close: null, status: 'PENDING', winner: null
+  });
+  saveHistoryArr(hist);
+}
+
+function markOutcome(id, winner) {
+  const hist = loadHistory();
+  const rec = hist.find(r => r.id === id);
+  if (!rec) return;
+  rec.winner = winner;
+  rec.status = ((rec.p1 >= 0.5) === (winner === 'a')) ? 'CORRECT' : 'WRONG';
+  saveHistoryArr(hist);
+  renderHistoryTab();
+}
+
+function undoOutcome(id) {
+  const hist = loadHistory();
+  const rec = hist.find(r => r.id === id);
+  if (!rec) return;
+  rec.winner = null; rec.status = 'PENDING';
+  saveHistoryArr(hist);
+  renderHistoryTab();
+}
+
+const numIn = id => { const v = parseFloat(String(document.getElementById(id)?.value || '').replace(',', '.')); return v > 1 ? v : null; };
+
+function saveOdds(id) {
+  const hist = loadHistory();
+  const rec = hist.find(r => r.id === id);
+  if (!rec) return;
+  const ta = numIn(`tk-a-${id}`), tb = numIn(`tk-b-${id}`), ca = numIn(`cl-a-${id}`), cb = numIn(`cl-b-${id}`);
+  if (ta && tb) {
+    rec.odds = { a: ta, b: tb };
+    const e = computeEdge(rec.p1, ta, tb);
+    rec.side = e.side; rec.ev = e.bestEv;
+  }
+  rec.close = (ca && cb) ? { a: ca, b: cb } : null;
+  saveHistoryArr(hist);
+  renderHistoryTab();
+}
+
+function deleteHistoryEntry(id) {
+  saveHistoryArr(loadHistory().filter(r => r.id !== id));
+  renderHistoryTab();
+}
+
+const sgn = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
+
+function renderHistoryTab() {
+  const hist = loadHistory();
+  const onlyPicks = document.getElementById('hist-filter')?.value === 'picks';
+  const S = histSummary(onlyPicks ? hist.filter(r => r.isPick) : hist);
+
+  const card = (val, lbl, sub, neg) => `<div class="hist-stat-card"><div class="val ${neg ? 'neg' : ''}">${val}</div><div class="lbl">${lbl}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+  document.getElementById('hist-stats').innerHTML =
+    card(S.n, t('hist-total')) +
+    card(S.resolved, t('hist-resolved')) +
+    card(S.accuracy != null ? Math.round(S.accuracy * 100) + '%' : '-', t('hist-accuracy')) +
+    card(S.avgClv != null ? sgn(S.avgClv) : '-', t('hist-avg-clv'), S.nClv ? tf('hist-n', { n: S.nClv }) : t('hist-need-close'), S.avgClv != null && S.avgClv < 0) +
+    card(S.beat != null ? Math.round(S.beat * 100) + '%' : '-', t('hist-beat')) +
+    card(S.roi != null ? sgn(S.roi) : '-', t('hist-roi'), S.staked ? tf('hist-pnl', { p: (S.pnl >= 0 ? '+' : '') + S.pnl.toFixed(2), n: S.staked }) : '', S.roi != null && S.roi < 0) +
+    card(S.llModel != null ? S.llModel.toFixed(3) + ' / ' + S.llClose.toFixed(3) : '-', t('hist-ll'), S.nCmp ? tf('hist-n', { n: S.nCmp }) : '', S.llModel != null && S.llModel > S.llClose);
+
+  if (!hist.length) {
+    document.getElementById('hist-list').innerHTML = `<div class="hist-empty">${t('hist-empty')}</div>`;
+    return;
+  }
+
+  document.getElementById('hist-list').innerHTML = hist.map(r => {
+    const dateStr = new Date(r.timestamp).toLocaleString(_lang === 'en' ? 'en-US' : 'cs-CZ');
+    const badgeClass = r.status === 'PENDING' ? 'pending' : r.status === 'CORRECT' ? 'correct' : 'wrong';
+    const favoredName = r.p1 >= 0.5 ? r.teamAName : r.teamBName;
+    const favoredPct = (Math.max(r.p1, 1 - r.p1) * 100).toFixed(1);
+    const c = clvOf(r);
+    const sideName = c ? (c.side === 'a' ? r.teamAName : r.teamBName) : null;
+
+    let line = '';
+    if (c) {
+      line += tf('hist-side', { team: esc(sideName), o: c.taken.toFixed(2), ev: c.ev != null ? sgn(c.ev) : '-' }) + (r.book ? ' (' + esc(r.book) + ')' : '')
+        + (r.isPick ? ` · <b>${t('hist-pick')}</b>` : '');
+      if (c.clv != null) {
+        line += '<br>' + tf('hist-close-line', { o: c.closeSide.toFixed(2), f: c.fairClose.toFixed(2), m: (c.closeMargin * 100).toFixed(1) })
+          + ` · CLV <span class="${c.clv >= 0 ? 'clv-pos' : 'clv-neg'}">${sgn(c.clv)}</span>`;
+      }
+    } else {
+      line = t('hist-no-odds');
+    }
+    if (r.live) line += ` · <span class="clv-neg">${t('hist-live')}</span>`;
+
+    const v = x => x != null ? x.toFixed(2) : '';
+    const form = `<div class="close-form">
+        <span>${t('hist-taken')}</span>
+        <input id="tk-a-${r.id}" value="${v(r.odds?.a)}" placeholder="${esc(r.teamAName)}">
+        <input id="tk-b-${r.id}" value="${v(r.odds?.b)}" placeholder="${esc(r.teamBName)}">
+        <span>${t('hist-closing')}</span>
+        <input id="cl-a-${r.id}" value="${v(r.close?.a)}" placeholder="${esc(r.teamAName)}">
+        <input id="cl-b-${r.id}" value="${v(r.close?.b)}" placeholder="${esc(r.teamBName)}">
+        <button class="act-btn" onclick="saveOdds(${r.id})">${t('hist-save-odds')}</button>
+      </div>`;
+
+    return `
+      <div class="hist-row">
+        <div class="hist-row-top">
+          <div>
+            <div class="hist-match">${esc(r.teamAName)} vs ${esc(r.teamBName)}</div>
+            <div class="hist-meta">${dateStr} · ${esc(tf('hist-favored', { team: favoredName, pct: favoredPct }))}${r.model ? ' · ' + (r.model === 'players' ? t('flag-pm') : 'OpenDota rating') : ''}</div>
+          </div>
+          <div>
+            <span class="hist-badge ${badgeClass}">${r.status}</span>
+            <button onclick="deleteHistoryEntry(${r.id})" style="margin-left:8px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">🗑</button>
+          </div>
+        </div>
+        <div class="hist-line">${line}</div>
+        ${form}
+        ${r.status === 'PENDING' ? `
+          <div class="hist-outcome-btns">
+            <button onclick="markOutcome(${r.id}, 'a')">${esc(tf('hist-mark-winner', { team: r.teamAName }))}</button>
+            <button onclick="markOutcome(${r.id}, 'b')">${esc(tf('hist-mark-winner', { team: r.teamBName }))}</button>
+          </div>
+        ` : `<div class="hist-meta" style="margin-top:8px">${esc(tf('hist-winner-was', { team: r.winner === 'a' ? r.teamAName : r.teamBName }))}
+             <button class="act-btn" style="margin-left:8px" onclick="undoOutcome(${r.id})">${t('hist-undo')}</button></div>`}
+      </div>`;
+  }).join('');
+}
+
+// Init
+try { document.getElementById('odds-input').value = localStorage.getItem(ODDS_KEY) || ''; } catch {}
+try { const mj = localStorage.getItem(MODEL_KEY); if (mj) PLAYER_MODEL = JSON.parse(mj); } catch {}
+try { const ov = localStorage.getItem('dota_offline_v1'); if (ov === '0') document.getElementById('offline-mode').checked = false; } catch {}
+applyLang();
+renderModelStatus();
+</script>
+</body>
+</html>
